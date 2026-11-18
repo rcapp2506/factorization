@@ -1,0 +1,6 @@
+# Artefatti Python
+__pycache__/
+*.pyc
+# Output locali delle run (i risultati del paper restano tracciati nei commit originali)
+**/Resultados/
+*.ipynb_checkpoints/

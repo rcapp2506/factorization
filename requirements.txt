@@ -1,0 +1,10 @@
+# Fork de-HPC — esecuzione locale della modalità "Simulation" (qiskit-aer).
+# CUNQA (simulatore distribuito HPC del CESGA) NON è incluso: serve solo per
+# le modalità "Shots"/"Circuits" sull'infrastruttura QMIO del CESGA.
+qiskit>=1.3
+qiskit-aer>=0.15
+numpy>=1.26
+scipy>=1.13
+networkx>=3.3
+pandas>=2.2
+matplotlib>=3.6
