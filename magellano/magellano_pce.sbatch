@@ -6,7 +6,7 @@
 #
 # Indice del task:  id = n_idx * R + seed   (n_idx = riga di Numbers_test.txt)
 # L'header è dimensionato per 28 semiprimi × R=10 seed = 280 task (0-279).
-# Per un R diverso:  sbatch --array=0-$((28*R-1))%16 --export=ALL,R=<R> magellano_pce.sbatch
+# Per un R diverso:  sbatch --array=0-$((28*R-1))%64 --export=ALL,R=<R> magellano_pce.sbatch
 #
 # Parametri (override con --export=ALL,...):
 #   R        numero di seed per semiprimo (default 10)
@@ -19,15 +19,15 @@
 # Avvio:
 #   cd /gpfs/ddn/cta/cappu/factorization/slurm
 #   sbatch magellano_pce.sbatch
-#   sbatch --array=0-139%16 magellano_pce.sbatch   # solo i primi 14 semiprimi (R=10)
+#   sbatch --array=0-139%64 magellano_pce.sbatch   # solo i primi 14 semiprimi (R=10)
 #SBATCH --job-name=pce_fact
 #SBATCH --account=default
 #SBATCH --partition=levante
-#SBATCH --array=0-279%16
+#SBATCH --array=0-279%64
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=8G
-#SBATCH --time=12:00:00
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=4G
+#SBATCH --time=06:00:00
 #SBATCH --output=/gpfs/ddn/cta/cappu/factorization/slurm/logs/pce_%A_%a.out
 #SBATCH --error=/gpfs/ddn/cta/cappu/factorization/slurm/logs/pce_%A_%a.err
 

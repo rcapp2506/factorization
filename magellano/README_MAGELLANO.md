@@ -13,7 +13,7 @@ magellano/
 ├── setup_magellano.sh     una tantum sul login node: directory, venv (requirements.txt), sbatch, verifica import
 ├── magellano_common.sh    pezzo comune agli sbatch: module + venv + threading
 ├── magellano_smoke.sbatch 899 e 4009 con seed 0 (~minuti) su nodo di calcolo
-├── magellano_pce.sbatch   array 28 semiprimi × R=10 seed (0-279, max 16 in parallelo)
+├── magellano_pce.sbatch   array 28 semiprimi × R=10 seed (0-279, max 64 in parallelo)
 ├── push_to_magellano.sh   dal portatile (WSL): rsync del codice (~pochi MB)
 └── pull_results.sh        dal portatile: rientro di $BASE/output in magellano_results/
 ```
@@ -36,8 +36,8 @@ tail -f logs/smoke_<jobid>.out
 # 4. array completo: 28 semiprimi × 10 seed
 sbatch magellano_pce.sbatch
 # varianti:
-sbatch --array=0-139%16 magellano_pce.sbatch                       # primi 14 semiprimi
-sbatch --array=0-139%16 --export=ALL,R=5 magellano_pce.sbatch      # 28 × 5 seed
+sbatch --array=0-139%64 magellano_pce.sbatch                       # primi 14 semiprimi
+sbatch --array=0-139%64 --export=ALL,R=5 magellano_pce.sbatch      # 28 × 5 seed
 sbatch --export=ALL,K=4,MAXITER=500 magellano_pce.sbatch           # altri parametri
 squeue -u $USER
 
@@ -61,9 +61,13 @@ sovrascrivono tra seed.
 
 La modalità Simulation è leggera: `num_qubits(2·bits(N), k)` resta sotto ~10
 qubit anche per N a 38 bit, quindi lo statevector è piccolo e il costo sta
-nell'ottimizzatore classico. Default per task: 4 core, 8G, 12h. I numeri più
-grandi (ultime righe) sono i più lenti: conviene un primo giro sulle prime righe
-e poi la coda alta a parte. Partizione `levante`: walltime massimo 30 giorni.
+nell'ottimizzatore classico, che è seriale (un candidato alla volta): un run usa
+un solo core, e la velocità del singolo core conta più del numero di core. Default
+per task: 1 core, 4G, 6h; fino a 64 task in parallelo. Riferimento dallo smoke
+(seed 0): 899 in 9 s, 4009 (k=4) in 82 s. I numeri più grandi (ultime righe)
+sono i più lenti e non ancora misurati: conviene un primo giro sulle prime 14
+righe (`--array=0-139%64`), misurare i tempi, poi la coda alta con un walltime
+adeguato. Partizione `levante`: walltime massimo 30 giorni.
 
 ## Output
 
