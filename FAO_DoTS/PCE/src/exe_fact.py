@@ -251,8 +251,11 @@ def ejecutar_fact(
     print(f"los números son p_primo: {p_int} y q_primo: {q_int}\n")
 
     num_result = p_int*q_int
-    
-    if num_result == N_int:
+
+    # NOTE (fork): se gcd(a-b, N) = 1, extract_factors restituisce p=1, q=N e
+    # p*q == N è vero anche se la fattorizzazione è triviale (run fallito).
+    # Si conta come soluzione solo una fattorizzazione non banale.
+    if num_result == N_int and 1 < p_int < N_int:
         Solution_Reached = "True"
     else:
         Solution_Reached = "False"
