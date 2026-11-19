@@ -3,4 +3,6 @@ __pycache__/
 *.pyc
 # Output locali delle run (i risultati del paper restano tracciati nei commit originali)
 **/Resultados/
+# Risultati rientrati da Magellano (magellano/pull_results.sh)
+magellano_results/
 *.ipynb_checkpoints/

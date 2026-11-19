@@ -3,19 +3,21 @@
 # setup_magellano.sh — configurazione UNA TANTUM dell'ambiente di
 # fattorizzazione PCE/DoTS su Magellano (INFN Pisa).
 #
-# Da eseguire sul login node (magellano.pi.infn.it), dalla cartella in cui hai
-# copiato il repo (vedi push_to_magellano.sh):
-#     bash setup_magellano.sh
+# Da eseguire sul login node (magellano.pi.infn.it). Di norma il repo è già
+# stato copiato in $BASE/code da push_to_magellano.sh:
+#     cd /gpfs/ddn/cta/cappu/factorization/code && bash magellano/setup_magellano.sh
+# Se lo lanci da un'altra copia del repo, il codice viene sincronizzato in $BASE/code.
 #
 # Cosa fa:
 #   1. crea l'albero di lavoro in /gpfs/ddn/cta/cappu/factorization
-#   2. crea il venv dedicato factorization_venv (python 3.13 da module) con
-#      qiskit, qiskit-aer, scipy, numpy, pandas, networkx (requirements.txt)
-#   3. copia il codice del repo al suo posto ($BASE/code)
-#   4. verifica l'ambiente (import qiskit/aer + uno smoke factor piccolo)
+#   2. crea il venv dedicato factorization_venv (python 3.13 da module) con le
+#      dipendenze di requirements.txt
+#   3. sincronizza il codice in $BASE/code (solo se lanciato da un'altra copia)
+#      e copia sbatch e common in $BASE/slurm
+#   4. verifica gli import (niente calcolo sul login node: lo smoke è uno sbatch)
 # Rieseguibile: non ricrea ciò che esiste.
 # ============================================================================
-set -euo pipefail
+set -eo pipefail   # niente -u: module/Lmod e activate possono usare variabili non definite
 
 BASE="/gpfs/ddn/cta/cappu/factorization"
 VENV="/gpfs/ddn/cta/cappu/factorization_venv"
@@ -33,32 +35,34 @@ if [ ! -x "$VENV/bin/python" ]; then
 fi
 source "$VENV/bin/activate"
 pip install --upgrade pip -q
-# Dipendenze dal requirements.txt del repo (qiskit>=1.3, aer>=0.15, ...).
 pip install -q -r "$SRC/requirements.txt"
-python - << 'PY'
-import qiskit, qiskit_aer, numpy, scipy
-print(f"   qiskit {qiskit.__version__}  aer {qiskit_aer.__version__}  "
-      f"numpy {numpy.__version__}  scipy {scipy.__version__}")
-PY
 
-echo "══ 3. codice del repo in $BASE/code"
-# rsync del repo escludendo git, cache e risultati locali
-rsync -a --delete \
-    --exclude '.git' --exclude '__pycache__' --exclude 'Resultados' \
-    --exclude '*.pyc' \
-    "$SRC"/ "$BASE/code/"
-# gli sbatch e il common vivono in slurm/
+echo "══ 3. codice e sbatch"
+if [ "$(realpath "$SRC")" != "$(realpath "$BASE/code")" ]; then
+    rsync -a --delete \
+        --exclude '.git' --exclude '__pycache__' --exclude '*.pyc' \
+        --exclude 'Resultados' --exclude 'magellano_results' \
+        "$SRC"/ "$BASE/code/"
+    echo "   codice sincronizzato da $SRC"
+else
+    echo "   codice già in $BASE/code"
+fi
 cp -v "$SRC"/magellano/magellano_*.sbatch "$SRC"/magellano/magellano_common.sh "$BASE/slurm/"
 
-echo "══ 4. verifica: smoke factor 899 = 29 × 31 (Simulation)"
+echo "══ 4. verifica import"
 cd "$BASE/code/FAO_DoTS/PCE"
-python run_local.py --num 899 --k 3 --optimizer DIFFERENTIALEVOLUTION --maxiter 100
+python - << 'PY'
+import qiskit, qiskit_aer, numpy, scipy
+from src.exe_experiments import ejecutar_experimentos  # noqa: F401
+print(f"   qiskit {qiskit.__version__}  aer {qiskit_aer.__version__}  "
+      f"numpy {numpy.__version__}  scipy {scipy.__version__}  — import progetto OK")
+PY
 
 cat << MSG
 
 Setup completato. Prossimi passi:
   cd $BASE/slurm
-  sbatch magellano_pce.sbatch          # array sui semiprimi di Numbers_test.txt
+  sbatch magellano_smoke.sbatch        # verifica su nodo di calcolo (~minuti)
+  sbatch magellano_pce.sbatch          # array 28 semiprimi × 10 seed
   squeue -u \$USER
-  tail -f logs/pce_*_*.out
 MSG
