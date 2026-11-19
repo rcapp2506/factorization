@@ -263,7 +263,13 @@ def loss_func_estimator(
     ### ----------------------------------------------------- ###
     ### 7. Guardar resultados intermedios
     ### ----------------------------------------------------- ###
-    experiment_result.append({"loss": total_loss, "exp_map": node_exp_map})
+    # NOTE (fork): si conserva solo la valutazione migliore. In origine si
+    # accodava un dizionario (con tutta la exp_map) a OGNI valutazione: con
+    # maxiter=3000 erano >1M dizionari e diversi GB (OUT_OF_MEMORY su Magellano).
+    # exe_fact.py usa solo la valutazione di loss minima e, a parità di loss,
+    # l'ultima in ordine di tempo: il confronto "<=" riproduce la stessa scelta.
+    if not experiment_result or total_loss <= experiment_result[0]["loss"]:
+        experiment_result[:] = [{"loss": total_loss, "exp_map": node_exp_map}]
 
     return total_loss, base_loss
 

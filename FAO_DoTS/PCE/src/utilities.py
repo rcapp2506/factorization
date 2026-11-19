@@ -46,7 +46,8 @@ def run_vqe_optimization(
     result : OptimizeResult
         Resultado del optimizador.
     experiment_result : list
-        Lista con los resultados de la función de pérdida en cada evaluación.
+        Lista con un único elemento: la evaluación de pérdida mínima
+        ({"loss", "exp_map"}; en caso de empate, la más reciente).
     """
 
     experiment_result = []
