@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# magellano_pce.sbatch — fattorizzazione PCE/DoTS (modalità Simulation, Aer
-# statevector) su Magellano (INFN Pisa). Array job su (semiprimo × seed): R run
-# indipendenti e riproducibili per ogni N di Numbers_test.txt, per stimare la
-# probabilità di successo ps e il TTS.
+# magellano_pce.sbatch — fattorizzazione PCE/DoTS (simulazione statevector)
+# su Magellano (INFN Pisa). Array job su (semiprimo × seed): R run indipendenti
+# e riproducibili per ogni N del file NUMBERS, per stimare la probabilità di
+# successo ps e il TTS.
 #
-# Indice del task:  id = n_idx * R + seed   (n_idx = riga di Numbers_test.txt)
+# Indice del task:  id = n_idx * R + seed   (n_idx = riga del file NUMBERS)
 # L'header è dimensionato per 28 semiprimi × R=10 seed = 280 task (0-279).
 # Per un R diverso:  sbatch --array=0-$((28*R-1))%64 --export=ALL,R=<R> magellano_pce.sbatch
 #
@@ -13,8 +13,17 @@
 #   K        ordine di compressione PCE (default 3)
 #   MAXITER  iterazioni massime dell'ottimizzatore (default 300)
 #   OPT      DIFFERENTIALEVOLUTION | PSO | QDPSO (default DIFFERENTIALEVOLUTION)
+#   BACKEND  numpy (default, src/fast_sim.py, ~5-9x più veloce) | aer
+#   NUMBERS  file dei semiprimi, assoluto o relativo a $CODE_DIR
+#            (default Numbers_test.txt; es. magellano/numbers_cesga_k4.txt)
+#   TAG      nome della cartella di output (default k<K>_<OPT>_it<MAXITER>)
 #
-# Output: $BASE/output/k<K>_<OPT>_it<MAXITER>/N<N>/seed_<s>/Resultados/...
+# Output: $BASE/output/<TAG>/N<N>/seed_<s>/Resultados/...
+#
+# Campagna CESGA k=4 (14 semiprimi × 20 seed, budget 10000, run fino a ~1 giorno):
+#   sbatch --array=0-279%280 --time=48:00:00 \
+#          --export=ALL,R=20,K=4,MAXITER=10000,NUMBERS=magellano/numbers_cesga_k4.txt,TAG=cesga_k4_it10000 \
+#          magellano_pce.sbatch
 #
 # Avvio:
 #   cd /gpfs/ddn/cta/cappu/factorization/slurm
@@ -37,8 +46,11 @@ source /gpfs/ddn/cta/cappu/factorization/slurm/magellano_common.sh
 : "${K:=3}"
 : "${MAXITER:=300}"
 : "${OPT:=DIFFERENTIALEVOLUTION}"
+: "${BACKEND:=numpy}"
+: "${NUMBERS:=Numbers_test.txt}"
+: "${TAG:=k${K}_${OPT}_it${MAXITER}}"
 
-NUMBERS="$CODE_DIR/Numbers_test.txt"
+[[ "$NUMBERS" = /* ]] || NUMBERS="$CODE_DIR/$NUMBERS"
 [ -f "$NUMBERS" ] || { echo "✗ manca $NUMBERS"; exit 1; }
 
 N_IDX=$(( SLURM_ARRAY_TASK_ID / R ))
@@ -63,12 +75,12 @@ print(rows[idx])
 PY
 ) || exit 1
 
-OUT="$BASE/output/k${K}_${OPT}_it${MAXITER}/N${N}/seed_${SEED}"
-echo "  task $SLURM_ARRAY_TASK_ID → N=$N (riga $N_IDX)  seed=$SEED  k=$K  opt=$OPT  maxiter=$MAXITER"
+OUT="$BASE/output/${TAG}/N${N}/seed_${SEED}"
+echo "  task $SLURM_ARRAY_TASK_ID → N=$N (riga $N_IDX di $(basename "$NUMBERS"))  seed=$SEED  k=$K  opt=$OPT  maxiter=$MAXITER  backend=$BACKEND"
 echo "  output: $OUT"
 t0=$(date +%s)
 python run_local.py --num "$N" --k "$K" --optimizer "$OPT" --maxiter "$MAXITER" \
-       --seed "$SEED" --outdir "$OUT"
+       --seed "$SEED" --outdir "$OUT" --backend "$BACKEND"
 RC=$?
 echo "  N=$N seed=$SEED terminato rc=$RC in $(( $(date +%s) - t0 ))s"
 exit $RC

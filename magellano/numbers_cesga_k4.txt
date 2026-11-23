@@ -1,0 +1,16 @@
+# Semiprimi usati dal CESGA con DoTS k=4 (FAO_DoTS/Results/Resultados/Factorization/k_4).
+# Formato come Numbers_test.txt: <bit> bits <N> = <p> × <q>; fattori ricavati per divisione.
+10 bits 899 = 29 × 31
+12 bits 4009 = 19 × 211
+14 bits 12349 = 53 × 233
+16 bits 49583 = 179 × 277
+18 bits 159317 = 313 × 509
+20 bits 881851 = 727 × 1213
+22 bits 3819047 = 1873 × 2039
+24 bits 16668371 = 3637 × 4583
+26 bits 40072889 = 5279 × 7591
+30 bits 911938673 = 29483 × 30931
+32 bits 2956694171 = 50683 × 58337
+34 bits 10080582527 = 99787 × 101021
+36 bits 66847008023 = 257093 × 260011
+39 bits 446718216403 = 457339 × 976777
