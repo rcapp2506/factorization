@@ -133,7 +133,11 @@ def ejecutar_fact(
     qc_builder.compile_circuit()          # construir el circuito
     qc = qc_builder.get_circuit()         # obtener el circuito final
 
-    if cunqa_str_arg != "Simulation":
+    # NOTE (fork): "Numpy" è una modalità di simulazione statevector come
+    # "Simulation" (stesso circuito senza misure, stesse probabilità esatte).
+    SIM_MODES = ("Simulation", "Numpy")
+
+    if cunqa_str_arg not in SIM_MODES:
 
         # --- Crear copias del circuito original para medir en cada base ---
         qc_z = qc.copy()  # Para términos Z
@@ -200,8 +204,8 @@ def ejecutar_fact(
     start_time = time.time()
 
     # Definir rutas para guardar resultados (CSV)
-    if cunqa_str_arg == "Simulation":
-        subcarpeta_csv = f"Resultados/Factorization/k_{k}/{cunqa_str_arg}/num_{N_int}/{optimizer}"
+    if cunqa_str_arg in SIM_MODES:
+        subcarpeta_csv =f"Resultados/Factorization/k_{k}/{cunqa_str_arg}/num_{N_int}/{optimizer}"
     else:
         subcarpeta_csv = f"Resultados/Factorization/k_{k}/{cunqa_str_arg}/{nqpus}qpus/num_{N_int}/{optimizer}"
 
@@ -306,8 +310,8 @@ def ejecutar_fact(
     print("El programa ha finalizado ✅\n")
 
     # === 8. Guardar resultados en archivo JSON ===
-    if cunqa_str_arg == "Simulation":
-        subcarpeta = f"Resultados/Factorization/k_{k}/{cunqa_str_arg}/num_{N_int}/{optimizer}"
+    if cunqa_str_arg in SIM_MODES:
+        subcarpeta =f"Resultados/Factorization/k_{k}/{cunqa_str_arg}/num_{N_int}/{optimizer}"
     else:
         subcarpeta = f"Resultados/Factorization/k_{k}/{cunqa_str_arg}/{nqpus}qpus/num_{N_int}/{optimizer}"
     

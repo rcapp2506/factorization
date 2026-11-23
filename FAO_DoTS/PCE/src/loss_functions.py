@@ -102,10 +102,13 @@ def loss_func_estimator(
     ### 1. Bind de parámetros en cada circuito
     ### ----------------------------------------------------- ###
 
-    bound_circuit_list = [
-        qc.assign_parameters({param: val for param, val in zip(qc.parameters, x)})
-        for qc in ansatz
-    ]
+    # NOTE (fork): in modalità "Numpy" il bind non serve (il simulatore numpy
+    # prende direttamente x) e da solo costa 0.2-1.7 ms per valutazione.
+    if CUNQA != "Numpy":
+        bound_circuit_list = [
+            qc.assign_parameters({param: val for param, val in zip(qc.parameters, x)})
+            for qc in ansatz
+        ]
     
     ### ----------------------------------------------------- ###
     ### 2. Obtener counts y construir tensor de probabilidades
@@ -146,6 +149,14 @@ def loss_func_estimator(
             results = gather(qjobs)
 
             counts_list = combine_counts_circuits(results, n_qubits=num_qubits)[1]
+
+    elif CUNQA == "Numpy":
+        # NOTE (fork): simulatore statevector numpy (src/fast_sim.py), stesse
+        # probabilità esatte della modalità "Simulation" (Aer) senza l'overhead
+        # di 3 run Aer per valutazione. Verificato in tests/check_numpy_backend.py.
+        from src.fast_sim import get_sim
+        counts_list = get_sim(ansatz[0]).probabilities(x)
+        n_shots = 1
 
     elif CUNQA == "Simulation":
 

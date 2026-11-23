@@ -12,6 +12,12 @@ Uso:
 --outdir cartella in cui scrivere Resultados/ (default: cartella corrente). Run
          con seed diversi sullo stesso N vanno in outdir diversi, altrimenti i CSV
          di iterazione si sovrascrivono.
+--backend numpy (default) | aer. "numpy" usa src/fast_sim.py: stesse probabilità
+         esatte di Aer, ~5-9x più veloce (tests/check_numpy_backend.py). I
+         risultati finiscono in Resultados/.../Numpy/ invece di .../Simulation/.
+
+Il CSV con una riga per valutazione si scrive solo con PCE_LOG_EVALS=1 (con k=4
+è ~1 GB per run); quello per generazione (*_iter.csv) si scrive sempre.
 """
 import os, sys, argparse
 
@@ -32,7 +38,10 @@ def main():
                     help="Seed dell'ottimizzatore (default: nessuno, run non riproducibile)")
     ap.add_argument("--outdir", default=None,
                     help="Cartella in cui scrivere Resultados/ (default: cartella corrente)")
+    ap.add_argument("--backend", default="numpy", choices=["numpy", "aer"],
+                    help="Simulatore statevector: numpy (default, veloce) o aer (riferimento)")
     args = ap.parse_args()
+    mode = {"numpy": "Numpy", "aer": "Simulation"}[args.backend]
 
     optimizer_params = None
     if args.seed is not None:
@@ -47,7 +56,7 @@ def main():
 
     combos = casuistica_experimento(["Factorization"], [args.num], [args.optimizer], [args.k])
     for combo in combos:
-        print(f"\n[run_local] esperimento: {combo}  seed={args.seed}  outdir={os.getcwd()}")
+        print(f"\n[run_local] esperimento: {combo}  seed={args.seed}  backend={args.backend}  outdir={os.getcwd()}")
         ruta_csv, ruta_csv_iter = ejecutar_experimentos(
             exp_list=combo,
             optimizer_params=optimizer_params,
@@ -56,10 +65,10 @@ def main():
             maxiter=args.maxiter,
             n_shots=1,          # ignorato in Simulation (statevector esatto)
             nqpus=None,
-            cunqa_str="Simulation",
+            cunqa_str=mode,
             family_name=None,
         )
-        print(f"[run_local] CSV: {os.path.join(os.getcwd(), ruta_csv)}")
+        print(f"[run_local] CSV per generazione: {os.path.join(os.getcwd(), ruta_csv_iter)}")
 
 
 if __name__ == "__main__":

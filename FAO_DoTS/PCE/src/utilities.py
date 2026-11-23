@@ -50,8 +50,27 @@ def run_vqe_optimization(
         ({"loss", "exp_map"}; en caso de empate, la más reciente).
     """
 
+    import os as _os
+
+    class _EvalCounter:
+        """Sostituto di cost_history quando il log per valutazione è disattivato:
+        conta le valutazioni (len) senza conservarne i valori."""
+        def __init__(self):
+            self.n = 0
+        def append(self, _):
+            self.n += 1
+        def __len__(self):
+            return self.n
+        def __iter__(self):
+            return iter(())
+
+    # NOTE (fork): il CSV con una riga per OGNI valutazione (k=4: ~33M righe,
+    # ~1 GB per run) si scrive solo con PCE_LOG_EVALS=1. Il CSV per
+    # iterazione/generazione (_iter.csv) si scrive sempre.
+    log_evals = _os.environ.get("PCE_LOG_EVALS", "0") == "1"
+
     experiment_result = []
-    cost_history = []
+    cost_history = [] if log_evals else _EvalCounter()
     iteration_costs = []
 
     # =========================================================
@@ -389,6 +408,7 @@ def run_vqe_optimization(
         # Asegurarse de que exista la carpeta
         os.makedirs(os.path.dirname(log_csv_path), exist_ok=True)
 
+    if log_csv_path and log_evals:
         # Abrir el CSV con lock
         with open(log_csv_path, "w", newline="", encoding="utf-8") as f:
             # Bloqueo exclusivo
@@ -400,6 +420,7 @@ def run_vqe_optimization(
             f.flush()
             fcntl.flock(f, fcntl.LOCK_UN)  # desbloquear
 
+    if log_csv_path:
         iter_csv_path = log_csv_path.replace(".csv", "_iter.csv")
         with open(iter_csv_path, "w", newline="", encoding="utf-8") as f:
             fcntl.flock(f, fcntl.LOCK_EX)
