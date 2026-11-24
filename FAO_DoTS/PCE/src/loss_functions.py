@@ -35,8 +35,6 @@ from qiskit_aer import AerSimulator
 
 def loss_func_estimator(
     x,
-    alpha,
-    beta,
     ansatz,
     sim,
     N_int,
@@ -59,10 +57,6 @@ def loss_func_estimator(
     ----------
     x : array-like
         Vector de parámetros del ansatz.
-    alpha : float
-        Escala para la función tanh en la pérdida.
-    beta : float
-        Escala del término de regularización.
     ansatz : list[QuantumCircuit]
         Lista de circuitos paramétricos para cada base (X, Y, Z).
     sim : Backend
@@ -245,14 +239,12 @@ def loss_func_estimator(
     ### ----------------------------------------------------- ###
     prefactor_delta = N_int
 
-    z_int = p_int * q_int
-    r_int = N_int ^ z_int
-    # evaluate
-    # el primer termino evalua el numero de unos en la representacion binaria de r
-    # !!! TBD: hay que ponerlo al cuadrado !!!
-    # el segundo termino penaliza las soluciones triviales
-
-    loss_pq = r_int.bit_count()**2 + prefactor_delta*(kron_delta(N_int, p_int) + kron_delta(N_int, q_int) + kron_delta(1, p_int) + kron_delta(1, q_int))
+    # NOTE (fork): p = gcd(a-b, N) e q = N // p, quindi p*q == N SEMPRE. Il
+    # termine originale popcount(N XOR p*q)**2 era identicamente 0 e le quattro
+    # delta scattavano a coppie (p == 1 <=> q == N, p == N <=> q == 1): loss_pq
+    # vale 2N per una fattorizzazione banale e 0 altrimenti. Stesso valore
+    # numerico dell'espressione originale, scritto per quello che è.
+    loss_pq = 2 * prefactor_delta * int(p_int == 1 or p_int == N_int)
 
     #print(f"loss_pq: {loss_pq}")
 
@@ -280,7 +272,7 @@ def loss_func_estimator(
     # exe_fact.py usa solo la valutazione di loss minima e, a parità di loss,
     # l'ultima in ordine di tempo: il confronto "<=" riproduce la stessa scelta.
     if not experiment_result or total_loss <= experiment_result[0]["loss"]:
-        experiment_result[:] = [{"loss": total_loss, "exp_map": node_exp_map}]
+        experiment_result[:] = [{"loss": total_loss, "base": base_loss, "exp_map": node_exp_map}]
 
     return total_loss, base_loss
 

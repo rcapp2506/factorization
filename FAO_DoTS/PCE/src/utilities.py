@@ -22,8 +22,6 @@ from functools import partial
 def run_vqe_optimization(
     sim,
     n_shots,
-    alpha,
-    beta,
     compiled_circuit,
     N_int,
     num_a_bits,
@@ -88,8 +86,15 @@ def run_vqe_optimization(
     def callback_de_indicator(intermediate_result):
         iteration_costs.append(intermediate_result.fun)
 
-        x_best = intermediate_result.x
-        indicator_value = base_loss_func(x_best)
+        # NOTE (fork): il migliore della popolazione di DE è la valutazione di
+        # loss minima vista finora, cioè quella conservata in experiment_result
+        # insieme alla sua loss base. La si legge da lì invece di rivalutare il
+        # circuito: prima ogni generazione costava una valutazione in più, non
+        # contata in nfev. Se le loss non coincidono si ricalcola come prima.
+        if experiment_result and experiment_result[0]["loss"] == intermediate_result.fun:
+            indicator_value = experiment_result[0]["base"]
+        else:
+            indicator_value = base_loss_func(intermediate_result.x)
 
         if indicator_value == 0.0:
             print("🎯 Se alcanzó solución física (indicador = 0.0)")
@@ -110,8 +115,6 @@ def run_vqe_optimization(
         def loss_func(x):
             total, base = loss_func_estimator(
                 x=x,
-                alpha=alpha,
-                beta=beta,
                 ansatz=compiled_circuit,
                 sim=sim,
                 N_int=N_int,
@@ -137,8 +140,6 @@ def run_vqe_optimization(
             else:
                 _, base = loss_func_estimator(
                     x=x,
-                    alpha=alpha,
-                    beta=beta,
                     ansatz=compiled_circuit,
                     sim=sim,
                     N_int=N_int,
@@ -342,7 +343,9 @@ def run_vqe_optimization(
             bounds = [(0, 2*np.pi)] * len(initial_params)
 
             # Ejecutar QDPSO
-            best_value, best_position, history = qpso_simple.minimize_qdpso(
+            # NOTE (fork): la storia per iterazione va in iteration_costs (come nel
+            # ramo PSO), altrimenti _iter.csv resta con la sola intestazione.
+            best_value, best_position, iteration_costs = qpso_simple.minimize_qdpso(
                 loss_func=loss_func,          # con regularización
                 base_loss_func=base_loss_func,      # sin regularización
                 x0=initial_params,
@@ -407,6 +410,12 @@ def run_vqe_optimization(
     if log_csv_path:
         # Asegurarse de que exista la carpeta
         os.makedirs(os.path.dirname(log_csv_path), exist_ok=True)
+
+    # NOTE (fork): senza log per valutazione, un CSV per valutazione rimasto da
+    # un run precedente nella stessa cartella apparterrebbe a un altro run
+    # (mentre _iter.csv viene sovrascritto): lo si elimina.
+    if log_csv_path and not log_evals and os.path.exists(log_csv_path):
+        os.remove(log_csv_path)
 
     if log_csv_path and log_evals:
         # Abrir el CSV con lock

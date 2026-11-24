@@ -69,12 +69,8 @@ for combo in combinaciones:
 
     print(f"\n🚀 Running experiment with parameters: {combo}")
     
-    # The hyperparameter alpha is not used in the simulations
-    alpha = 0.0
-    beta = 0.0
-    
     # Execute the experiment and obtain the CSV path containing the results
-    ruta_csv, ruta_csv_iter = ejecutar_experimentos(exp_list=combo, optimizer_params=optimizer_params, alpha=alpha, beta=beta, maxiter=maxiter, n_shots=n_shots, nqpus = None, cunqa_str = "Simulation", family_name = None)
+    ruta_csv, ruta_csv_iter = ejecutar_experimentos(exp_list=combo, optimizer_params=optimizer_params, maxiter=maxiter, n_shots=n_shots, nqpus = None, cunqa_str = "Simulation", family_name = None)
     
     # Generate and save the corresponding plot from the experiment CSV
     # graficar_coste(ruta_csv_iter)

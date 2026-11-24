@@ -55,8 +55,6 @@ def ejecutar_fact(
     optimizer,
     optimizer_params, 
     k,
-    alpha,
-    beta,
     maxiter,
     n_shots,
     nqpus,
@@ -113,6 +111,21 @@ def ejecutar_fact(
     # === 3. Construir codificaciones de Pauli ===
     # Se dividen los nodos en tres subconjuntos (X, Y, Z)
     list_size = m // 3
+
+    # NOTE (fork): le variabili sono ripartite in list_size stringhe X, list_size
+    # Y e le restanti m - 2*list_size Z, ma num_qubits garantisce solo
+    # 3*C(qubits, k) >= m. Se m = 3*C(qubits, k) - 1 la base Z dovrebbe fornire
+    # C(qubits, k) + 1 valori e ne ha uno in meno: l'ultima variabile (il bit
+    # più significativo di b) non esiste e b ha un bit in meno, senza errori.
+    # Succede ad es. per N a 22 bit con k=4 (m=44, 6 qubit, C(6,4)=15, Z ne
+    # richiede 16). Comportamento dell'upstream, lasciato invariato per
+    # riprodurre i risultati CESGA; qui lo si segnala soltanto.
+    n_strings = math.comb(qubits, k)
+    n_z = m - 2 * list_size
+    if n_z > n_strings:
+        print(f"⚠️  [fork] {n_z} variabili sulla base Z ma solo {n_strings} stringhe di Pauli "
+              f"disponibili con {qubits} qubit e k={k}: b è codificato con "
+              f"{num_b_bits - (n_z - n_strings)} bit invece di {num_b_bits}.")
     
     # === 4. Crear y compilar el circuito cuántico ===
     sim = AerSimulator()   # simulador de Qiskit Aer
@@ -218,8 +231,6 @@ def ejecutar_fact(
     result, experiment_result = run_vqe_optimization(
         sim=sim,
         n_shots=n_shots,
-        alpha=alpha,
-        beta=beta,
         compiled_circuit=compiled_circuit,
         N_int=N_int,
         num_a_bits=num_a_bits,
@@ -289,8 +300,6 @@ def ejecutar_fact(
         "compression": k,
         "qubits":qubits, 
         "elapsed_time": elapsed,
-        "alpha": alpha,
-        "beta": beta,
         "f_loss_value": fvalue,
         "function_evaluations": fevs,
         "Number of iterations": nit,

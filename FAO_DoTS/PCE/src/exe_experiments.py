@@ -57,7 +57,7 @@ def filtrar_combinaciones(combos, indice, valor):
 
 
 
-def ejecutar_experimentos(exp_list, optimizer_params, alpha, beta, maxiter, n_shots, nqpus, cunqa_str, family_name):   
+def ejecutar_experimentos(exp_list, optimizer_params, maxiter, n_shots, nqpus, cunqa_str, family_name):   
     """
     Ejecuta un experimento de MaxCut para una combinación de parámetros dada.
 
@@ -79,15 +79,6 @@ def ejecutar_experimentos(exp_list, optimizer_params, alpha, beta, maxiter, n_sh
         Si no se pasa, se usan los valores por defecto.
          
 
-    alpha : float
-        Peso del término principal de la función de coste (este valor será ignorado internamente,
-        ya que la función vuelve a calcular alpha en base al número de qubits).  
-        *Mantener por compatibilidad con la interfaz externa.*
-
-    beta : float
-        Igual que alpha: parámetro externo no utilizado directamente (se recalcula dentro
-        según qubits). Se mantiene por compatibilidad.
-
     maxiter : int
         Número máximo de iteraciones del optimizador clásico.
 
@@ -107,7 +98,6 @@ def ejecutar_experimentos(exp_list, optimizer_params, alpha, beta, maxiter, n_sh
     --------------
     - Carga el objeto correspondiente según el problema y tamaño.
     - Calcula el número de qubits necesarios en función de los vértices y k.
-    - Recalcula internamente alpha y beta en función del número de qubits.
     - Ejecuta MaxCut mediante `ejecutar_maxcut()`, que:
         • prepara el circuito,
         • ejecuta el optimizador,
@@ -145,8 +135,6 @@ def ejecutar_experimentos(exp_list, optimizer_params, alpha, beta, maxiter, n_sh
         optimizer=optimizer,
         optimizer_params=opt_params,
         k=k,
-        alpha=alpha,
-        beta=beta,
         maxiter=maxiter,
         n_shots=n_shots,
         nqpus=nqpus,

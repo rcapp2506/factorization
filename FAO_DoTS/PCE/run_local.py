@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """
-Runner locale (fork de-HPC) per l'approccio DoTS in modalità Simulation (qiskit-aer).
-Sostituisce main_simul.py per l'esecuzione fuori dall'ambiente HPC CUNQA.
+Runner locale (fork de-HPC) per l'approccio DoTS con simulazione statevector
+esatta (backend numpy o qiskit-aer). Sostituisce main_simul.py per l'esecuzione
+fuori dall'ambiente HPC CUNQA.
 
 Uso:
     python run_local.py --num 899 --k 3 --optimizer DIFFERENTIALEVOLUTION --maxiter 300
     python run_local.py --num 899 --seed 7 --outdir runs/seed_7   # run riproducibile e isolato
 
 --seed   rende il run riproducibile: è passato a scipy differential_evolution
-         (DE) e usato per inizializzare il generatore globale di numpy (PSO/QDPSO).
+         (DE) e inizializza i generatori globali di `random` (usato da PSO/QDPSO)
+         e di numpy.
 --outdir cartella in cui scrivere Resultados/ (default: cartella corrente). Run
          con seed diversi sullo stesso N vanno in outdir diversi, altrimenti i CSV
          di iterazione si sovrascrivono.
@@ -45,8 +47,10 @@ def main():
 
     optimizer_params = None
     if args.seed is not None:
+        import random
         import numpy as np
-        np.random.seed(args.seed)   # PSO/QDPSO usano il generatore globale
+        random.seed(args.seed)      # PSO/QDPSO estraggono dal modulo random della stdlib
+        np.random.seed(args.seed)
         if args.optimizer == "DIFFERENTIALEVOLUTION":
             optimizer_params = {"DIFFERENTIALEVOLUTION": {"seed": args.seed}}
 
@@ -60,10 +64,8 @@ def main():
         ruta_csv, ruta_csv_iter = ejecutar_experimentos(
             exp_list=combo,
             optimizer_params=optimizer_params,
-            alpha=0.0,
-            beta=0.0,
             maxiter=args.maxiter,
-            n_shots=1,          # ignorato in Simulation (statevector esatto)
+            n_shots=1,          # ignorato: statevector esatto (numpy e aer)
             nqpus=None,
             cunqa_str=mode,
             family_name=None,

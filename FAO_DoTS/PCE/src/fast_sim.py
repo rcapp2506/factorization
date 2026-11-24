@@ -34,8 +34,14 @@ class PauliRotationSim:
     (`qc.parameters`), quindi `probabilities(x)` accetta lo stesso vettore x.
     """
 
+    MAX_QUBITS = 12   # H⊗n è una matrice densa 2^n x 2^n: 268 MB a 12 qubit, 4 GB a 14
+
     def __init__(self, qc):
         n = qc.num_qubits
+        if n > self.MAX_QUBITS:
+            raise ValueError(
+                f"il backend numpy supporta fino a {self.MAX_QUBITS} qubit (richiesti {n}): "
+                f"usare il backend aer (run_local.py --backend aer)")
         self.n = n
         dim = 2 ** n
         idx = np.arange(dim)
@@ -94,14 +100,15 @@ class PauliRotationSim:
         return [px, py, pz]
 
 
-_CACHE = {}
+_LAST = [None, None]   # (circuito, simulatore) dell'ultimo circuito usato
 
 
 def get_sim(qc):
-    """Simulatore per il circuito qc, costruito una volta e riusato."""
-    key = id(qc)
-    hit = _CACHE.get(key)
-    if hit is None or hit[0] is not qc:
-        hit = (qc, PauliRotationSim(qc))   # si tiene qc per evitare il riuso dell'id
-        _CACHE[key] = hit
-    return hit[1]
+    """Simulatore per il circuito qc, costruito una volta e riusato.
+
+    Si tiene solo l'ultimo: un run usa un unico circuito, e in un processo che
+    ne esegue molti non si accumulano simulatori (e matrici H⊗n) di run finiti.
+    """
+    if _LAST[0] is not qc:
+        _LAST[:] = [qc, PauliRotationSim(qc)]
+    return _LAST[1]

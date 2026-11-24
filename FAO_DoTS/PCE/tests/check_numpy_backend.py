@@ -13,7 +13,7 @@ Uso (dalla cartella FAO_DoTS/PCE):
 3. Log: senza PCE_LOG_EVALS si scrive solo il CSV per generazione.
 Esce con codice 1 al primo controllo fallito.
 """
-import os, sys, tempfile, time
+import os, shutil, sys, tempfile, time
 import numpy as np
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -61,7 +61,7 @@ def single_evaluations(n_points=40):
                 er = []
                 t0 = time.perf_counter()
                 tot, base = loss_func_estimator(
-                    x=x, alpha=0.0, beta=0.0, ansatz=[cz], sim=sim, N_int=N, num_a_bits=nb,
+                    x=x, ansatz=[cz], sim=sim, N_int=N, num_a_bits=nb,
                     num_b_bits=nb, list_size=m // 3, num_qubits=q, d_t=d_t, n_shots=1,
                     experiment_result=er, CUNQA=mode)
                 t[mode] += time.perf_counter() - t0
@@ -92,7 +92,7 @@ def full_runs():
                 t0 = time.perf_counter()
                 r, _, ruta_csv, ruta_iter = ejecutar_fact(
                     N_int=N, optimizer="DIFFERENTIALEVOLUTION", optimizer_params={"seed": seed},
-                    k=k, alpha=0.0, beta=0.0, maxiter=maxiter, n_shots=1, nqpus=None,
+                    k=k, maxiter=maxiter, n_shots=1, nqpus=None,
                     cunqa_str_arg=mode, family_name=None)
                 tt[mode] = time.perf_counter() - t0
                 res[mode] = r
@@ -101,6 +101,7 @@ def full_runs():
                           "3. log: presente solo il CSV per generazione (niente CSV per valutazione)")
             finally:
                 os.chdir(cwd)
+                shutil.rmtree(d, ignore_errors=True)
         def same(u, v):
             # float (loss finale, che include il termine di regolarizzazione calcolato
             # dalle <P>): uguali entro 1e-12 relativo; interi, stringhe e liste esatti.

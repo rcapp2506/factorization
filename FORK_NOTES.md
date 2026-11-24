@@ -23,6 +23,34 @@ fork ne estende l'uso in due direzioni:
 - `FAO_DoTS/PCE/run_local.py` — runner da riga di comando che sostituisce
   `main_simul.py` (quest'ultimo contiene un placeholder non eseguibile).
 - `requirements.txt` — dipendenze per l'esecuzione locale.
+- `FAO_DoTS/PCE/src/` — pulizie dopo la review del 24/11/2026, **senza effetto
+  sui risultati** (stesso seed → stesso JSON, verificato su run che convergono
+  e su run che esauriscono il budget):
+  - `alpha` e `beta` tolti da tutta la catena di chiamate
+    (`ejecutar_experimentos`, `ejecutar_fact`, `run_vqe_optimization`,
+    `loss_func_estimator`) e dal JSON di output: non entravano in nessun calcolo.
+    I JSON originali del CESGA hanno ancora i due campi (sempre 0.0).
+  - `loss_pq` scritta per quello che vale: `p = gcd(a−b, N)` e `q = N // p`
+    danno sempre `p·q = N`, quindi il termine `popcount(N XOR p·q)²` era
+    identicamente 0 e `loss_pq` vale `2N` (fattorizzazione banale) oppure 0.
+  - Il criterio di arresto di DE legge la loss base del migliore da
+    `experiment_result` invece di rivalutare il circuito: prima ogni generazione
+    costava una valutazione in più non contata in `function_evaluations`.
+  - QDPSO: `np.NaN` → `np.nan` (NumPy 2) e storia per iterazione scritta in
+    `_iter.csv`. `--seed` ora inizializza anche il modulo `random`, da cui
+    PSO/QDPSO estraggono davvero.
+  - Backend numpy: errore esplicito oltre 12 qubit (usare `--backend aer`).
+
+### Limite noto dell'upstream, lasciato invariato
+
+Le m = 2·bit(N) variabili sono ripartite in ⌊m/3⌋ stringhe X, ⌊m/3⌋ Y e le
+restanti Z, ma il numero di qubit garantisce solo 3·C(q,k) ≥ m. Quando
+m = 3·C(q,k) − 1 la base Z dovrebbe fornire C(q,k)+1 valori e ne ha uno in meno:
+il bit più significativo di `b` non è codificato e `b` ha un bit in meno, senza
+errori. Con k=4 (fino a 7 qubit) succede per N a 7, 22 e 52 bit; nella campagna CESGA k=4 solo
+per N = 3819047 (22 bit, `b` su 21 bit). Il comportamento non è stato corretto
+per restare confrontabili con i risultati CESGA: `ejecutar_fact` stampa un
+avviso.
 
 ## Esecuzione locale
 

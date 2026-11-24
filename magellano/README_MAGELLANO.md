@@ -1,6 +1,6 @@
 # Fattorizzazione PCE/DoTS su Magellano (INFN Pisa) — partizione `levante`
 
-Esegue la modalità **Simulation** (Aer statevector, nessun CUNQA) del ramo
+Esegue la simulazione statevector esatta (backend numpy di default, oppure Aer; nessun CUNQA) del ramo
 `FAO_DoTS/PCE` come job SLURM. L'array copre **semiprimo × seed**: R run
 indipendenti e riproducibili per ogni N di `Numbers_test.txt`, da cui stimare la
 probabilità di successo `ps` e il TTS. Stesse convenzioni dei job iSEEDs: nodi
@@ -59,7 +59,7 @@ sovrascrivono tra seed.
 
 ## Dimensionamento
 
-La modalità Simulation è leggera: `num_qubits(2·bits(N), k)` resta sotto ~10
+La simulazione statevector è leggera: `num_qubits(2·bits(N), k)` resta sotto ~10
 qubit anche per N a 38 bit, quindi lo statevector è piccolo e il costo sta
 nell'ottimizzatore classico, che è seriale (un candidato alla volta): un run usa
 un solo core, e la velocità del singolo core conta più del numero di core. Default
@@ -72,10 +72,14 @@ adeguato. Partizione `levante`: walltime massimo 30 giorni.
 ## Output
 
 ```
-$BASE/output/k<K>_<OPT>_it<MAXITER>/N<N>/seed_<s>/Resultados/Factorization/k_<K>/Simulation/num_<N>/<OPT>/
-    Fact_num_<N>_<OPT>_<K>.json     riepilogo (Sol_Reached, p, q, nfev, tempo, ...)
-    Fact_num_<N>_<OPT>_<K>.csv      storia delle iterazioni
+$BASE/output/<TAG>/N<N>/seed_<s>/Resultados/Factorization/k_<K>/<MODO>/num_<N>/<OPT>/
+    Fact_num_<N>_<OPT>_<K>.json       riepilogo (Sol_Reached, p, q, nfev, tempo, ...)
+    Fact_num_<N>_<OPT>_<K>_iter.csv   loss migliore a ogni iterazione/generazione
+    Fact_num_<N>_<OPT>_<K>.csv        loss di ogni valutazione (solo con PCE_LOG_EVALS=1)
 ```
+
+`<TAG>` è `k<K>_<OPT>_it<MAXITER>` se non si passa `TAG`; `<MODO>` è `Numpy` con
+`BACKEND=numpy` (default) e `Simulation` con `BACKEND=aer`.
 
 `pull_results.sh` porta `$BASE/output/` in `<repo>/magellano_results/`, che è
 ignorata da git ed esclusa da `push_to_magellano.sh`.

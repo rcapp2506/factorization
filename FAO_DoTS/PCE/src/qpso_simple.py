@@ -8,7 +8,7 @@ class Particle(object):
         for idx, (lo, hi) in enumerate(bounds):
             self._x[idx] = random.uniform(lo, hi)
         self._best = self._x.copy()
-        self._best_value = np.NaN
+        self._best_value = np.nan
 
     def __getitem__(self, key):
         return self._x[key]
