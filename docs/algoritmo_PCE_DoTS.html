@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PCE / DoTS — come funziona l'algoritmo di fattorizzazione</title>
+<style>
+:root{
+  --bg:#f7f7f5; --card:#ffffff; --ink:#1d1d1f; --muted:#5f6368; --line:#d7d7d2; --soft:#efefeb;
+  --c-prep:#2f6fdb; --c-prep-bg:#e8f0fd;
+  --c-q:#7a4cc2;    --c-q-bg:#f1eafb;
+  --c-cl:#14826b;   --c-cl-bg:#e3f4ef;
+  --c-out:#b8650a;  --c-out-bg:#fcf0e0;
+  --ok:#14826b; --bad:#c0392b; --warn:#b8650a;
+  --focus:#2f6fdb;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#16171a; --card:#1f2024; --ink:#ececec; --muted:#a3a7ad; --line:#3a3c42; --soft:#2a2b30;
+    --c-prep:#7aa7ff; --c-prep-bg:#1d2a44;
+    --c-q:#b99af0;    --c-q-bg:#2c2340;
+    --c-cl:#4fd1b0;   --c-cl-bg:#143a33;
+    --c-out:#f0a64a;  --c-out-bg:#3d2a12;
+    --ok:#4fd1b0; --bad:#ff7b6b; --warn:#f0a64a; --focus:#7aa7ff;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{max-width:1400px;margin:0 auto;padding:28px 24px 8px}
+h1{font-size:1.7rem;margin:0 0 6px;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:0;max-width:900px}
+nav.top{max-width:1400px;margin:14px auto 0;padding:0 24px;display:flex;gap:8px;flex-wrap:wrap}
+nav.top button{border:1px solid var(--line);background:var(--card);color:var(--ink);padding:7px 14px;border-radius:999px;cursor:pointer;font:inherit;font-size:.92rem}
+nav.top button[aria-current="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+main{max-width:1400px;margin:0 auto;padding:16px 24px 60px}
+.view{display:none}.view.active{display:block}
+.layout{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:1100px){.layout{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
+.sticky{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto}
+@media (max-width:1100px){.sticky{position:static;max-height:none}}
+.hint{color:var(--muted);font-size:.9rem;margin:0 0 8px}
+svg text{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.node{cursor:pointer;outline:none}
+.node rect,.node polygon{stroke-width:1.6;transition:stroke-width .12s}
+.node:hover rect,.node:hover polygon,.node:focus-visible rect,.node:focus-visible polygon{stroke-width:3}
+.node.sel rect,.node.sel polygon{stroke-width:3.4}
+.node .t{font-weight:650;font-size:16.5px;fill:var(--ink)}
+.node .s{font-size:12.8px;fill:var(--muted)}
+.node .num{font-size:11px;font-weight:700}
+.g-prep rect{fill:var(--c-prep-bg);stroke:var(--c-prep)} .g-prep .num{fill:var(--c-prep)}
+.g-q rect{fill:var(--c-q-bg);stroke:var(--c-q)} .g-q .num{fill:var(--c-q)}
+.g-cl rect,.g-cl polygon{fill:var(--c-cl-bg);stroke:var(--c-cl)} .g-cl .num{fill:var(--c-cl)}
+.g-out rect{fill:var(--c-out-bg);stroke:var(--c-out)} .g-out .num{fill:var(--c-out)}
+.arrow{stroke:var(--muted);stroke-width:1.6;fill:none}
+.arrow.dash{stroke-dasharray:5 4}
+.albl{font-size:12px;fill:var(--muted)}
+.loopbox{fill:none;stroke:var(--line);stroke-width:1.5;stroke-dasharray:6 5}
+.looplbl{font-size:12.5px;fill:var(--muted);font-weight:600}
+.infobox rect{fill:var(--soft);stroke:var(--line)}
+.infobox text{font-size:12px;fill:var(--ink)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.85rem;color:var(--muted);margin-top:8px}
+.legend span::before{content:"";display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px;background:var(--sw)}
+/* pannello */
+.crumb{font-size:.85rem;color:var(--muted);margin-bottom:4px}
+.crumb a{color:var(--focus);cursor:pointer;text-decoration:none}
+.ptitle{font-size:1.35rem;margin:0 0 2px}
+.ptag{display:inline-block;font-size:.75rem;font-weight:700;padding:2px 8px;border-radius:999px;margin-bottom:10px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:8px 0 14px;flex-wrap:wrap}
+.tabs button{border:0;background:none;color:var(--muted);padding:8px 12px;cursor:pointer;font:inherit;font-size:.92rem;border-bottom:2.5px solid transparent;margin-bottom:-1px}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink);font-weight:600}
+.pbody h4{margin:16px 0 6px;font-size:1rem}
+.pbody p{margin:0 0 10px}
+.pbody ul,.pbody ol{margin:0 0 10px;padding-left:22px}
+.pbody li{margin:3px 0}
+.formula{background:var(--soft);border-radius:10px;padding:10px 14px;margin:8px 0 12px;font-family:var(--mono);font-size:.93rem;overflow-x:auto;white-space:nowrap}
+code{font-family:var(--mono);font-size:.88em;background:var(--soft);padding:1px 5px;border-radius:5px}
+.box{border-left:4px solid var(--c-prep);background:var(--soft);padding:9px 13px;border-radius:0 10px 10px 0;margin:10px 0}
+.box.q{border-color:var(--c-q)} .box.cl{border-color:var(--c-cl)} .box.out{border-color:var(--c-out)}
+details{border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin:10px 0}
+details summary{cursor:pointer;font-weight:600}
+details[open] summary{margin-bottom:8px}
+table{border-collapse:collapse;font-size:.9rem;margin:6px 0 12px;width:100%}
+th,td{border-bottom:1px solid var(--line);padding:5px 8px;text-align:left;vertical-align:top}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.03em}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.pnav{display:flex;justify-content:space-between;gap:8px;margin-top:18px;padding-top:12px;border-top:1px solid var(--line)}
+.pnav button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:7px 12px;cursor:pointer;font:inherit;font-size:.9rem}
+.pnav button:disabled{opacity:.35;cursor:default}
+.ref{font-family:var(--mono);font-size:.85rem}
+/* widget */
+.wgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:10px 0}
+.stat{background:var(--soft);border-radius:10px;padding:8px 12px}
+.stat .k{font-size:.78rem;color:var(--muted)}
+.stat .v{font-size:1.15rem;font-weight:650;font-variant-numeric:tabular-nums}
+label.in{display:inline-flex;flex-direction:column;font-size:.8rem;color:var(--muted);gap:3px;margin-right:10px;margin-bottom:8px}
+input,select{font:inherit;font-size:.95rem;padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);min-width:0}
+input.w{width:170px} input.s{width:110px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 10px}
+.chips button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:4px 11px;cursor:pointer;font-size:.85rem}
+.verdict{border-radius:10px;padding:10px 14px;margin:10px 0;font-weight:600}
+.verdict.ok{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
+.verdict.bad{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)}
+.verdict.warn{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)}
+.bits{font-family:var(--mono);font-size:.85rem;line-height:1.9}
+.bit{display:inline-block;min-width:1.55em;text-align:center;border-radius:4px;margin:1px;padding:0 2px}
+.bit.one{background:color-mix(in srgb,var(--c-q) 28%,transparent)}
+.bit.zero{background:var(--soft)}
+.tag-x{color:var(--c-prep);font-weight:700}.tag-y{color:var(--c-cl);font-weight:700}.tag-z{color:var(--c-out);font-weight:700}
+.scroll{overflow-x:auto}
+.gl dt{font-weight:650;margin-top:10px}
+.gl dd{margin:2px 0 0 0;color:var(--ink)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media (max-width:900px){.two{grid-template-columns:1fr}}
+footer{max-width:1400px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:.85rem}
+.circ text{font-size:10px;fill:var(--ink)}
+.circ .wire{stroke:var(--muted);stroke-width:1}
+.circ .gr{fill:var(--c-q-bg);stroke:var(--c-q);stroke-width:1.2}
+.circ .ge{fill:var(--c-cl-bg);stroke:var(--c-cl);stroke-width:1.2}
+.circ .gl2{stroke:var(--c-cl);stroke-width:2}
+.circ .ql{font-size:11px;fill:var(--muted)}
+.circ .ll{font-size:9.5px;fill:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Fattorizzare con PCE e DoTS: l'algoritmo passo per passo</h1>
+  <p class="sub">Come il codice del CESGA (<em>"Can PCE solve the factorisation problem via optimisation?"</em>, arXiv:2607.23727), che facciamo girare su Magellano, cerca i fattori primi di un numero N.
+  Il metodo è <strong>variazionale ibrido</strong>: un piccolo circuito quantistico (qui simulato) propone una soluzione, un ottimizzatore classico la migliora, e i due passi si ripetono.
+  Clicca un blocco del diagramma per aprirne la spiegazione. Ogni scheda va dal riassunto ai dettagli del codice.</p>
+</header>
+<nav class="top" aria-label="Sezioni">
+  <button data-view="v-diagram" aria-current="true">Diagramma</button>
+  <button data-view="v-lab">Laboratorio interattivo</button>
+  <button data-view="v-gloss">Glossario</button>
+</nav>
+
+<main>
+<!-- ======================= DIAGRAMMA ======================= -->
+<section id="v-diagram" class="view active">
+ <div class="layout">
+  <div class="card">
+   <p class="hint">Clicca un blocco, oppure usa ← → per seguire l'algoritmo nell'ordine.</p>
+   <svg id="flow" viewBox="0 0 980 600" role="img" aria-label="Diagramma di flusso dell'algoritmo PCE/DoTS" style="width:100%;height:auto">
+    <defs>
+     <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="currentColor" style="color:var(--muted)"/>
+     </marker>
+    </defs>
+    <text x="20" y="32" class="looplbl">1 · PREPARAZIONE (una sola volta per run)</text>
+
+    <!-- riga preparazione -->
+    <g class="node g-prep" data-id="n1" tabindex="0" role="button" aria-label="Il numero N">
+     <rect x="20" y="48" width="205" height="76" rx="12"/>
+     <text x="34" y="68" class="num">1</text>
+     <text x="34" y="90" class="t">Il numero N</text>
+     <text x="34" y="110" class="s">semiprimo N = p · q</text>
+    </g>
+    <g class="node g-prep" data-id="n2" tabindex="0" role="button" aria-label="DoTS: differenza di quadrati">
+     <rect x="262" y="48" width="205" height="76" rx="12"/>
+     <text x="276" y="68" class="num">2</text>
+     <text x="276" y="90" class="t">DoTS</text>
+     <text x="276" y="110" class="s">cerca a, b con a² ≡ b² (mod N)</text>
+    </g>
+    <g class="node g-prep" data-id="n3" tabindex="0" role="button" aria-label="Le incognite diventano bit">
+     <rect x="504" y="48" width="205" height="76" rx="12"/>
+     <text x="518" y="68" class="num">3</text>
+     <text x="518" y="90" class="t">Incognite → bit</text>
+     <text x="518" y="110" class="s">a e b scritti con m bit totali</text>
+    </g>
+    <g class="node g-prep" data-id="n4" tabindex="0" role="button" aria-label="Codifica PCE">
+     <rect x="746" y="48" width="214" height="76" rx="12"/>
+     <text x="760" y="68" class="num">4</text>
+     <text x="760" y="90" class="t">Codifica PCE</text>
+     <text x="760" y="110" class="s">m bit su pochi qubit (k = 4)</text>
+    </g>
+    <path class="arrow" d="M225,86 L258,86" marker-end="url(#ah)"/>
+    <path class="arrow" d="M467,86 L500,86" marker-end="url(#ah)"/>
+    <path class="arrow" d="M709,86 L742,86" marker-end="url(#ah)"/>
+
+    <!-- ciclo -->
+    <rect class="loopbox" x="20" y="168" width="940" height="306" rx="18"/>
+    <text x="300" y="466" class="looplbl">2 · CICLO DI OTTIMIZZAZIONE: ripetuto a ogni valutazione (fino a ~3·10⁷ volte)</text>
+    <path class="arrow dash" d="M853,124 L853,150 L485,150 L485,206" marker-end="url(#ah)"/>
+    <text x="500" y="145" class="albl">definisce quali correlatori leggere</text>
+    <path class="arrow dash" d="M140,124 L140,206" marker-end="url(#ah)"/>
+    <text x="148" y="150" class="albl">n qubit e profondità</text>
+
+    <g class="node g-q" data-id="n5" tabindex="0" role="button" aria-label="Circuito variazionale">
+     <rect x="50" y="210" width="220" height="74" rx="12"/>
+     <text x="64" y="230" class="num">5</text>
+     <text x="64" y="252" class="t">Circuito U(θ)</text>
+     <text x="64" y="272" class="s">ansatz con 243–334 parametri</text>
+    </g>
+    <g class="node g-q" data-id="n6" tabindex="0" role="button" aria-label="Simulazione e misura">
+     <rect x="375" y="210" width="220" height="74" rx="12"/>
+     <text x="389" y="230" class="num">6</text>
+     <text x="389" y="252" class="t">Misura dei correlatori</text>
+     <text x="389" y="272" class="s">⟨Π<tspan font-size="9" dy="3">i</tspan><tspan dy="-3">⟩ in basi X, Y, Z</tspan></text>
+    </g>
+    <g class="node g-cl" data-id="n7" tabindex="0" role="button" aria-label="Decodifica">
+     <rect x="700" y="210" width="230" height="74" rx="12"/>
+     <text x="714" y="230" class="num">7</text>
+     <text x="714" y="252" class="t">Decodifica</text>
+     <text x="714" y="272" class="s">segni → bit → a, b → gcd → p, q</text>
+    </g>
+    <g class="node g-cl" data-id="n8" tabindex="0" role="button" aria-label="Funzione di costo">
+     <rect x="700" y="370" width="230" height="74" rx="12"/>
+     <text x="714" y="390" class="num">8</text>
+     <text x="714" y="412" class="t">Funzione di costo</text>
+     <text x="714" y="432" class="s">indicatore + regolarizzazione</text>
+    </g>
+    <g class="node g-cl" data-id="n9" tabindex="0" role="button" aria-label="Differential Evolution">
+     <rect x="375" y="370" width="220" height="74" rx="12"/>
+     <text x="389" y="390" class="num">9</text>
+     <text x="389" y="412" class="t">Differential Evolution</text>
+     <text x="389" y="432" class="s">propone nuovi θ</text>
+    </g>
+    <g class="node g-cl" data-id="n10" tabindex="0" role="button" aria-label="Criterio di arresto">
+     <polygon points="35,407 160,358 285,407 160,456"/>
+     <text x="160" y="398" class="num" text-anchor="middle">10</text>
+     <text x="160" y="416" class="t" text-anchor="middle">Arresto?</text>
+     <text x="160" y="433" class="s" text-anchor="middle">ogni generazione</text>
+    </g>
+    <path class="arrow" d="M270,247 L371,247" marker-end="url(#ah)"/>
+    <path class="arrow" d="M595,247 L696,247" marker-end="url(#ah)"/>
+    <path class="arrow" d="M815,284 L815,366" marker-end="url(#ah)"/>
+    <text x="823" y="330" class="albl">p, q, a, b</text>
+    <path class="arrow" d="M700,407 L599,407" marker-end="url(#ah)"/>
+    <text x="612" y="398" class="albl">valore</text>
+    <path class="arrow" d="M375,407 L289,407" marker-end="url(#ah)"/>
+    <text x="296" y="398" class="albl">fine gen.</text>
+    <path class="arrow" d="M420,370 C420,330 250,330 240,288" marker-end="url(#ah)"/>
+    <text x="318" y="324" class="albl">nuovo θ</text>
+    <path class="arrow" d="M120,374 L120,288" marker-end="url(#ah)"/>
+    <text x="100" y="334" class="albl">no</text>
+
+    <!-- uscita -->
+    <text x="20" y="500" class="looplbl">3 · RISULTATO</text>
+    <path class="arrow" d="M160,456 L160,514" marker-end="url(#ah)"/>
+    <text x="168" y="493" class="albl">sì, oppure budget esaurito</text>
+    <g class="node g-out" data-id="n11" tabindex="0" role="button" aria-label="Risultato del run">
+     <rect x="50" y="518" width="220" height="70" rx="12"/>
+     <text x="64" y="537" class="num">11</text>
+     <text x="64" y="558" class="t">Risultato del run</text>
+     <text x="64" y="577" class="s">anticipato / decodificato / fallito</text>
+    </g>
+    <g class="node g-out" data-id="n12" tabindex="0" role="button" aria-label="Dalla singola esecuzione alla statistica">
+     <rect x="375" y="518" width="220" height="70" rx="12"/>
+     <text x="389" y="537" class="num">12</text>
+     <text x="389" y="558" class="t">Statistica sui seed</text>
+     <text x="389" y="577" class="s">ps, IC95, confronto CESGA</text>
+    </g>
+    <path class="arrow" d="M270,553 L371,553" marker-end="url(#ah)"/>
+    <text x="282" y="545" class="albl">× 20 seed</text>
+
+    <g class="infobox">
+     <rect x="680" y="500" width="280" height="92" rx="10"/>
+     <text x="694" y="520" font-weight="650">Ordini di grandezza (N a 39 bit)</text>
+     <text x="694" y="539">78 bit → 7 qubit · 74 strati · 334 parametri</text>
+     <text x="694" y="557">3340 individui × 10000 generazioni</text>
+     <text x="694" y="575">≈ 3,3·10⁷ valutazioni ≈ 25 h su 1 core</text>
+    </g>
+   </svg>
+   <div class="legend">
+    <span style="--sw:var(--c-prep)">formulazione classica del problema</span>
+    <span style="--sw:var(--c-q)">parte quantistica (simulata)</span>
+    <span style="--sw:var(--c-cl)">elaborazione classica</span>
+    <span style="--sw:var(--c-out)">risultati</span>
+   </div>
+  </div>
+
+  <aside class="card sticky" id="panel" aria-live="polite"></aside>
+ </div>
+</section>
+
+<!-- ======================= LABORATORIO ======================= -->
+<section id="v-lab" class="view">
+ <div class="two">
+  <div class="card">
+   <h3 style="margin-top:0">A · Quanto è grande il problema?</h3>
+   <p class="hint">Scegli N e k: le dimensioni sono calcolate con le stesse formule del codice (<span class="ref">exe_fact.py:96-113</span>, <span class="ref">circuit_builder.py</span>).</p>
+   <div class="chips" id="sizeChips"></div>
+   <label class="in">N<input id="szN" class="w" value="899" inputmode="numeric"></label>
+   <label class="in">k (ordine di compressione)<select id="szK"><option>2</option><option>3</option><option selected>4</option></select></label>
+   <div class="wgrid" id="szOut"></div>
+   <div id="szNote" class="hint"></div>
+   <h4>Assegnazione bit → stringhe di Pauli</h4>
+   <p class="hint">Ogni bit della soluzione è il <em>segno</em> di un correlatore su k qubit.</p>
+   <div class="scroll" id="szMap"></div>
+  </div>
+  <div class="card">
+   <h3 style="margin-top:0">B · Costo e decodifica per una coppia (a, b)</h3>
+   <p class="hint">È il calcolo che il codice ripete per ogni configurazione del circuito (<span class="ref">loss_functions.py:230-251</span>). Prova gli esempi:</p>
+   <div class="chips" id="lossChips"></div>
+   <label class="in">N<input id="lsN" class="w" value="899" inputmode="numeric"></label>
+   <label class="in">a<input id="lsA" class="s" value="30" inputmode="numeric"></label>
+   <label class="in">b<input id="lsB" class="s" value="1" inputmode="numeric"></label>
+   <div id="lsOut"></div>
+  </div>
+ </div>
+ <div class="card" style="margin-top:20px">
+  <h3 style="margin-top:0">C · Struttura del circuito (primi strati)</h3>
+  <p class="hint">Gli strati di rotazioni su un qubit si alternano a quelli di rotazioni su coppie di qubit. Le coppie scorrono di una posizione ogni due strati ("brickwork" rotante) e il tipo di porta segue un ciclo di 6 strati: RZ, RXX, RY, RZZ, RX, RYY.</p>
+  <label class="in">qubit n<select id="ciN"><option>5</option><option selected>6</option><option>7</option></select></label>
+  <label class="in">strati mostrati<select id="ciL"><option>6</option><option selected>12</option><option>18</option></select></label>
+  <div class="scroll" id="ciOut"></div>
+ </div>
+</section>
+
+<!-- ======================= GLOSSARIO ======================= -->
+<section id="v-gloss" class="view">
+ <div class="card">
+  <dl class="gl" id="glossary"></dl>
+ </div>
+</section>
+</main>
+<footer>Riferimenti al codice: cartella <code>FAO_DoTS/PCE/src/</code> del repository <code>factorization</code> (branch <code>benchmark-setup</code>). Parametri come nella campagna Magellano <code>cesga_k4_it10000</code>: k = 4, Differential Evolution, maxiter = 10000, backend numpy.</footer>
+
+<script>
+"use strict";
+/* ---------------------------------------------------------------
+   Contenuti delle schede. Ogni nodo ha: titolo, gruppo, e 4 livelli:
+   breve (intuizione), come (meccanismo), esempio (N = 899), codice.
+---------------------------------------------------------------- */
+const ORDER = ["n1","n2","n3","n4","n5","n6","n7","n8","n9","n10","n11","n12"];
+const GROUPS = {prep:["Formulazione classica","var(--c-prep)","var(--c-prep-bg)"],
+  q:["Parte quantistica","var(--c-q)","var(--c-q-bg)"], cl:["Elaborazione classica","var(--c-cl)","var(--c-cl-bg)"],
+  out:["Risultati","var(--c-out)","var(--c-out-bg)"]};
+const TABS = [["breve","In breve"],["come","Come funziona"],["esempio","Esempio N = 899"],["codice","Nel codice"]];
+
+const NODES = {
+n1:{t:"Il numero N", g:"prep",
+breve:`<p>Il punto di partenza è un intero <strong>N = p · q</strong>, prodotto di due numeri primi che non conosciamo (un <em>semiprimo</em>). L'obiettivo è trovare p e q.</p>
+<p>Moltiplicare due primi è facile, ma tornare indietro da N ai fattori è difficile: su questa asimmetria si basa la sicurezza della crittografia RSA. Qui non si tenta di rompere RSA, si studia se un algoritmo quantistico variazionale riesce a fattorizzare numeri piccoli e <strong>come cresce il costo</strong> all'aumentare dei bit.</p>`,
+come:`<p>Il "numero di bit" di N è la lunghezza della sua scrittura in binario: <code>nbit(N) = ⌊log₂ N⌋ + 1</code>. Per esempio 899 = 1110000011₂ ha 10 bit.</p>
+<p>Nella campagna di riproduzione usiamo gli stessi <strong>14 semiprimi</strong> del CESGA, da 10 a 39 bit:</p>
+<table><tr><th class="n">bit</th><th class="n">N</th><th>p × q</th></tr>
+<tr><td class="n">10</td><td class="n">899</td><td>29 × 31</td></tr><tr><td class="n">12</td><td class="n">4009</td><td>19 × 211</td></tr>
+<tr><td class="n">14</td><td class="n">12349</td><td>53 × 233</td></tr><tr><td class="n">16</td><td class="n">49583</td><td>179 × 277</td></tr>
+<tr><td class="n">18</td><td class="n">159317</td><td>313 × 509</td></tr><tr><td class="n">20</td><td class="n">881851</td><td>727 × 1213</td></tr>
+<tr><td class="n">22</td><td class="n">3819047</td><td>1873 × 2039</td></tr><tr><td class="n">24</td><td class="n">16668371</td><td>3637 × 4583</td></tr>
+<tr><td class="n">26</td><td class="n">40072889</td><td>5279 × 7591</td></tr><tr><td class="n">30</td><td class="n">911938673</td><td>29483 × 30931</td></tr>
+<tr><td class="n">32</td><td class="n">2956694171</td><td>50683 × 58337</td></tr><tr><td class="n">34</td><td class="n">10080582527</td><td>99787 × 101021</td></tr>
+<tr><td class="n">36</td><td class="n">66847008023</td><td>257093 × 260011</td></tr><tr><td class="n">39</td><td class="n">446718216403</td><td>457339 × 976777</td></tr></table>
+<p>L'algoritmo <em>non usa</em> p e q: servono solo a noi per verificare il risultato.</p>`,
+esempio:`<p>In tutta la guida useremo come esempio <strong>N = 899 = 29 × 31</strong>, il più piccolo della campagna: 10 bit.</p>
+<p>È abbastanza piccolo da seguire ogni passaggio a mano, e su Magellano si risolve in circa 16 secondi, quasi sempre già alla prima generazione dell'ottimizzatore.</p>`,
+codice:`<ul><li><span class="ref">run_local.py --num N --k 4 --seed s --maxiter 10000</span>: lancia un singolo run.</li>
+<li><span class="ref">magellano/numbers_cesga_k4.txt</span>: elenco dei 14 semiprimi.</li>
+<li><span class="ref">magellano/magellano_pce.sbatch</span>: job array SLURM, task <code>id = indice_N · 20 + seed</code>.</li>
+<li><span class="ref">src/auxiliar.py · bits_required()</span>: calcola <code>N.bit_length()</code>.</li></ul>`},
+
+n2:{t:"DoTS: differenza di due quadrati", g:"prep",
+breve:`<p>Invece di cercare direttamente p e q, si cercano <strong>due interi a e b</strong> tali che</p>
+<div class="formula">a² ≡ b² (mod N)   e   a ≢ ±b (mod N)</div>
+<p>Se ci si riesce, un fattore di N si ottiene "gratis" con il massimo comun divisore:</p>
+<div class="formula">p = gcd(a − b, N)</div>
+<p>DoTS sta per <em>Difference of Two Squares</em>. L'idea risale a Fermat ed è alla base dei migliori algoritmi classici (Dixon, crivello quadratico).</p>`,
+come:`<h4>Perché funziona</h4>
+<p>a² ≡ b² (mod N) significa che N divide a² − b² = (a − b)(a + b).</p>
+<p>Se N = p·q divide il prodotto ma non divide da solo né (a − b) né (a + b), allora p "sta" in uno dei due fattori e q nell'altro. Quindi gcd(a − b, N) estrae esattamente p.</p>
+<h4>Perché è comodo per un'ottimizzazione</h4>
+<ul><li>Il gcd si calcola in modo velocissimo con l'algoritmo di Euclide.</li>
+<li>La condizione si può misurare con un numero: il <em>resto</em> (a² − b²) mod N. Vale 0 quando la condizione è soddisfatta, quindi è un buon ingrediente per una funzione di costo (blocco 8).</li>
+<li>Ci sono molte coppie (a, b) che funzionano, non una sola: lo spazio contiene molte soluzioni.</li></ul>
+<details><summary>Approfondimento: l'altra formulazione del paper</summary>
+<p>Il repository contiene anche l'approccio "originale" (<code>FAO_ORG</code>), in cui i bit codificano direttamente p e q e il costo misura quanto p·q si discosta da N. DoTS (<code>FAO_DoTS</code>) cambia le incognite, (a, b) al posto di (p, q). La campagna su Magellano usa DoTS.</p></details>`,
+esempio:`<p>899 = 900 − 1 = <strong>30² − 1²</strong>, quindi a = 30 e b = 1 funzionano subito (è proprio il metodo di Fermat):</p>
+<div class="formula">gcd(30 − 1, 899) = gcd(29, 899) = 29   →   q = 899 / 29 = 31 ✓</div>
+<p>Non è l'unica: per esempio 61² − 32² = 2697 = 3·899 e gcd(29, 899) = 29. Contando tutte le coppie (a, b) rappresentabili con 10 bit ciascuno, quelle valide (condizione DoTS e fattore non banale) sono <strong>2250</strong> su 2²⁰ ≈ 10⁶, cioè circa lo 0,2%.</p>
+<p>Puoi provarle nel <a onclick="go('v-lab')" style="color:var(--focus);cursor:pointer">Laboratorio, riquadro B</a>.</p>`,
+codice:`<ul><li><span class="ref">src/auxiliar.py:314 · extract_factors(a, b, N)</span>: <code>g = gcd(a − b, N)</code>, <code>p = g</code>, <code>q = N // g</code>.</li>
+<li><span class="ref">src/loss_functions.py:232</span>: <code>D = (a − b)(a + b)</code>, usato nel costo.</li></ul>`},
+
+n3:{t:"Le incognite diventano bit", g:"prep",
+breve:`<p>Un computer quantistico (e qualunque problema di ottimizzazione combinatoria) lavora con <strong>variabili binarie</strong>.</p>
+<p>Quindi a e b si scrivono in binario, ciascuno con tanti bit quanti ne ha N. In totale le incognite sono</p>
+<div class="formula">m = 2 · nbit(N)   bit   x₀, x₁, …, x<sub>m−1</sub></div>
+<p>Trovare (a, b) equivale a trovare la stringa giusta di m bit.</p>`,
+come:`<ul><li>I primi nbit(N) bit formano <strong>a</strong>, i successivi formano <strong>b</strong>.</li>
+<li>Ordine: il primo bit di ciascun blocco è il <em>meno significativo</em> (LSB): a = x₀·1 + x₁·2 + x₂·4 + …</li>
+<li>Lo spazio di ricerca contiene 2<sup>m</sup> stringhe: circa 10⁶ per 10 bit, circa 3·10²³ per 39 bit. Provarle tutte è impossibile già per N moderati.</li></ul>
+<table><tr><th class="n">bit di N</th><th class="n">m</th><th class="n">configurazioni 2^m</th></tr>
+<tr><td class="n">10</td><td class="n">20</td><td class="n">1,0·10⁶</td></tr><tr><td class="n">22</td><td class="n">44</td><td class="n">1,8·10¹³</td></tr>
+<tr><td class="n">26</td><td class="n">52</td><td class="n">4,5·10¹⁵</td></tr><tr><td class="n">39</td><td class="n">78</td><td class="n">3,0·10²³</td></tr></table>`,
+esempio:`<p>N = 899 ha 10 bit, quindi m = 20.</p>
+<p>La soluzione a = 30, b = 1 corrisponde alla stringa (LSB a sinistra in ogni blocco):</p>
+<div class="formula">a = 30 → 0 1 1 1 1 0 0 0 0 0      b = 1 → 1 0 0 0 0 0 0 0 0 0</div>
+<p>In tutto sono 20 bit da indovinare: x₀…x₉ per a, x₁₀…x₁₉ per b.</p>`,
+codice:`<ul><li><span class="ref">src/exe_fact.py:96-99</span>: <code>num_a_bits = num_b_bits = bits_required(N)</code>, <code>m = num_a_bits + num_b_bits</code>.</li>
+<li><span class="ref">src/auxiliar.py:264 · alt_extract_primes()</span>: separa il vettore in a (primi nbit) e b (resto).</li>
+<li><span class="ref">src/auxiliar.py · bits_to_int()</span>: ordine LSB → MSB.</li></ul>`},
+
+n4:{t:"Codifica PCE (Pauli Correlation Encoding)", g:"prep",
+breve:`<p>L'approccio più semplice userebbe <strong>un qubit per bit</strong>: 78 qubit per un N a 39 bit. PCE fa molto meglio: ogni bit è associato a una <strong>correlazione fra k qubit</strong> e non a un singolo qubit.</p>
+<div class="formula">x<sub>i</sub> = 1 se ⟨Π<sub>i</sub>⟩ &gt; 0,   x<sub>i</sub> = 0 se ⟨Π<sub>i</sub>⟩ &lt; 0</div>
+<p>Qui Π<sub>i</sub> è un prodotto di k matrici di Pauli tutte uguali (X, Y oppure Z) su k qubit scelti. Con k = 4 bastano <strong>6 o 7 qubit</strong> per tutti gli N della campagna.</p>`,
+come:`<h4>Quante stringhe sono disponibili</h4>
+<p>Con n qubit ci sono C(n, k) modi di scegliere k qubit, e per ognuno 3 tipi di stringa (X⊗…⊗X, Y⊗…⊗Y, Z⊗…⊗Z). In totale 3·C(n, k) bit codificabili. Si sceglie il più piccolo n tale che</p>
+<div class="formula">3 · C(n, k) ≥ m</div>
+<table><tr><th>k = 4</th><th class="n">n qubit</th><th class="n">stringhe 3·C(n,4)</th><th>bit di N</th></tr>
+<tr><td></td><td class="n">6</td><td class="n">45</td><td>10 – 22 (m ≤ 44)</td></tr>
+<tr><td></td><td class="n">7</td><td class="n">105</td><td>24 – 39 (m ≤ 78)</td></tr></table>
+<p>La compressione è polinomiale: m cresce come n<sup>k</sup>, quindi n cresce solo come m<sup>1/k</sup>.</p>
+<h4>Come sono assegnati i bit</h4>
+<ol><li>I primi ⌊m/3⌋ bit vanno a stringhe di tipo <span class="tag-x">X</span>, sui sottoinsiemi di qubit presi in ordine lessicografico: {0,1,2,3}, {0,1,2,4}, …</li>
+<li>I successivi ⌊m/3⌋ bit vanno a stringhe <span class="tag-y">Y</span>, sugli stessi sottoinsiemi.</li>
+<li>I bit rimanenti vanno a stringhe <span class="tag-z">Z</span>.</li></ol>
+<p>La tabella completa per qualsiasi N è nel <a onclick="go('v-lab')" style="color:var(--focus);cursor:pointer">Laboratorio, riquadro A</a>.</p>
+<details><summary>Approfondimento: un caso limite, il bit che si perde</summary>
+<p>La condizione 3·C(n, k) ≥ m garantisce abbastanza stringhe <em>in totale</em>, ma la ripartizione in ⌊m/3⌋ + ⌊m/3⌋ + resto può chiederne alla base Z una in più di quelle che esistono. Succede quando m = 3·C(n, k) − 1.</p>
+<p>Nella campagna capita per un solo numero: N = 3819047 (22 bit). Lì m = 44 e n = 6, quindi ci sono 15 stringhe per tipo, ma la base Z dovrebbe codificare 16 bit. L'ultimo bit, il più significativo di b, non ha una stringa: <strong>b è rappresentato con 21 bit invece di 22</strong>, senza alcun errore.</p>
+<p>È un comportamento del codice originale, lasciato invariato per restare confrontabili con i risultati del CESGA (il fork stampa solo un avviso). Le soluzioni con b &lt; 2²¹ esistono comunque: su Magellano i run a 22 bit riescono 20 volte su 20.</p></details>
+<details><summary>Approfondimento: perché bastano 3 misure</summary>
+<p>Stringhe dello stesso tipo commutano tra loro. Quindi tutti i correlatori X si ricavano da un'unica distribuzione di probabilità misurata nella base X, e lo stesso vale per Y e Z: bastano 3 impostazioni di misura qualunque sia m. Il prezzo della compressione è che i bit non sono più indipendenti, perché tutti dipendono dallo stesso stato di pochi qubit, e l'ottimizzazione diventa più "aggrovigliata".</p>
+<p>Riferimento: Sciorilli et al., <em>Towards large-scale quantum optimization solvers with few qubits</em> (2024), dove PCE è stato introdotto per MaxCut.</p></details>`,
+esempio:`<p>N = 899: m = 20 bit, k = 4.</p>
+<p>3·C(5,4) = 15 &lt; 20, mentre 3·C(6,4) = 45 ≥ 20, quindi servono <strong>n = 6 qubit</strong> invece di 20.</p>
+<p>⌊20/3⌋ = 6, quindi:</p>
+<ul><li>x₀…x₅ → <span class="tag-x">X</span> sui sottoinsiemi {0,1,2,3}, {0,1,2,4}, {0,1,2,5}, {0,1,3,4}, {0,1,3,5}, {0,1,4,5};</li>
+<li>x₆…x₁₁ → <span class="tag-y">Y</span> sugli stessi 6 sottoinsiemi;</li>
+<li>x₁₂…x₁₉ → <span class="tag-z">Z</span> sui primi 8 sottoinsiemi.</li></ul>
+<p>Per esempio x₁ = 1 (secondo bit di a = 30) richiede ⟨X₀X₁X₂X₄⟩ &gt; 0.</p>`,
+codice:`<ul><li><span class="ref">src/auxiliar.py:21 · num_qubits(m, k)</span>: n minimo con 3·C(n,k) ≥ m.</li>
+<li><span class="ref">src/exe_fact.py:113</span>: <code>list_size = m // 3</code>, quanti bit per X e per Y.</li>
+<li><span class="ref">src/exe_fact.py:115-128</span>: avviso quando la base Z non ha abbastanza stringhe (si veda l'approfondimento in "Come funziona").</li>
+<li><span class="ref">src/tensor_exp_value.py · combination_tensor()</span>: i sottoinsiemi in ordine di <code>itertools.combinations</code>.</li>
+<li><span class="ref">src/tensor_exp_value.py:180 · select_nodes_from_aux()</span>: prende i primi ⌊m/3⌋ valori X, i primi ⌊m/3⌋ Y e i restanti m − 2⌊m/3⌋ Z.</li></ul>`},
+
+n5:{t:"Il circuito variazionale U(θ)", g:"q",
+breve:`<p>Il circuito è una sequenza fissa di porte quantistiche, ciascuna con un <strong>angolo regolabile</strong> θ<sub>j</sub>, come una manopola.</p>
+<p>Partendo dallo stato |0…0⟩ produce uno stato |ψ(θ)⟩. Cambiando gli angoli cambia lo stato, quindi cambiano i correlatori e quindi i bit decodificati.</p>
+<p>L'ottimizzatore classico (blocco 9) cerca gli angoli che portano alla soluzione. Questo schema si chiama <em>algoritmo quantistico variazionale</em> (VQA), e il circuito si chiama <em>ansatz</em>.</p>`,
+come:`<h4>Struttura ("Taylor_efficient", brickwork rotante)</h4>
+<ul><li>Numero di strati: <code>L = ⌈1,5 · n<sup>⌊k/2⌋</sup>⌉</code>, cioè 54 strati con 6 qubit e 74 strati con 7 qubit (k = 4).</li>
+<li>Gli strati pari sono <strong>rotazioni su un qubit</strong> (RZ, RY, RX). Quelli dispari sono <strong>rotazioni su coppie</strong> di qubit vicini (RXX, RZZ, RYY), che creano entanglement.</li>
+<li>Il tipo di porta segue un ciclo di 6 strati: RZ → RXX → RY → RZZ → RX → RYY → …</li>
+<li>Le coppie scorrono di un qubit ogni due strati: (0,1)(2,3)(4,5), poi (1,2)(3,4)(5,0), e così via. Ogni rotazione singola agisce solo sui qubit accoppiati in quello strato (sul primo strato su tutti).</li>
+<li>Ogni porta è una rotazione di Pauli exp(−i θ P / 2) con P ∈ {X, Y, Z, XX, YY, ZZ}. Tutti gli angoli variano in [0, 2π].</li></ul>
+<table><tr><th class="n">n</th><th class="n">strati</th><th class="n">parametri</th><th>usato per</th></tr>
+<tr><td class="n">6</td><td class="n">54</td><td class="n">243</td><td>10 – 22 bit</td></tr><tr><td class="n">7</td><td class="n">74</td><td class="n">334</td><td>24 – 39 bit</td></tr></table>
+<p>Lo schema dei primi strati è disegnato nel <a onclick="go('v-lab')" style="color:var(--focus);cursor:pointer">Laboratorio, riquadro C</a>.</p>
+<details><summary>Approfondimento: perché tanti parametri per così pochi qubit</summary>
+<p>Lo stato di 7 qubit ha 128 ampiezze complesse. Per raggiungere configurazioni di segno arbitrarie su 78 correlatori serve un circuito abbastanza espressivo, e la profondità cresce come n². Più parametri però vogliono dire uno spazio di ricerca più grande per l'ottimizzatore (334 dimensioni), ed è qui che il costo esplode.</p></details>`,
+esempio:`<p>N = 899 usa 6 qubit e 54 strati: 27 di rotazioni singole e 27 di coppie.</p>
+<p>Le porte sono 54 RZ, 54 RY, 54 RX, 27 RXX, 27 RZZ e 27 RYY, per un totale di <strong>243 angoli liberi</strong>. Un "punto" dello spazio di ricerca è quindi un vettore θ ∈ [0, 2π]<sup>243</sup>.</p>`,
+codice:`<ul><li><span class="ref">src/exe_fact.py:107</span>: <code>layers = ceil(1.5 · qubits^floor(k/2))</code>.</li>
+<li><span class="ref">src/circuit_builder.py:108 · _qiskit_circuit_()</span>: costruisce gli strati (modo <code>custom</code>, <code>Taylor_efficient</code>).</li>
+<li><span class="ref">src/circuit_builder.py:81</span>: connettività <code>brickwork_single_rotating</code>.</li></ul>`},
+
+n6:{t:"Simulazione e misura dei correlatori", g:"q",
+breve:`<p>Su un vero computer quantistico si eseguirebbe il circuito molte volte e si conterebbero gli esiti delle misure. Noi lo <strong>simuliamo esattamente</strong>: con 6–7 qubit lo stato ha solo 64–128 ampiezze.</p>
+<p>Dallo stato si calcolano i valori medi (valori d'aspettazione) di tutte le stringhe di Pauli del blocco 4, numeri compresi tra −1 e +1:</p>
+<div class="formula">⟨Π<sub>i</sub>⟩ = ⟨ψ(θ)| Π<sub>i</sub> |ψ(θ)⟩ ∈ [−1, +1]</div>`,
+come:`<ol><li><strong>Stato:</strong> si applicano le porte allo stato iniziale e si ottiene |ψ(θ)⟩.</li>
+<li><strong>Cambio di base:</strong> per leggere X si applica H a ogni qubit, per Y si applica S† e poi H, per Z non si fa nulla.</li>
+<li><strong>Probabilità:</strong> P<sub>B</sub>(s) = |ampiezza di s|² per ogni stringa di bit s, nelle tre basi B.</li>
+<li><strong>Correlatore:</strong> per una stringa su un sottoinsieme S di qubit, si guarda la <em>parità</em> dei bit misurati in S:
+<div class="formula">⟨Π<sub>S</sub>⟩ = Σ<sub>s</sub> P<sub>B</sub>(s) · (−1)<sup>Σ<sub>j∈S</sub> s<sub>j</sub></sup></div>
+È +1 se in S esce sempre un numero pari di "1", −1 se sempre dispari, un valore intermedio altrimenti.</li></ol>
+<p>Il codice precalcola una tabella di segni ("sign tensor") e ottiene tutti i correlatori con un solo prodotto matrice-vettore.</p>
+<details><summary>Approfondimento: backend numpy e backend Aer</summary>
+<p>Il codice originale usa Qiskit Aer. Nel fork abbiamo aggiunto <code>fast_sim.py</code>, un simulatore numpy specializzato per circuiti fatti solo di rotazioni di Pauli. Dà probabilità identiche (scarti dell'ordine di 10⁻¹⁵) ed è 5–9 volte più veloce, con circa 2–3 ms per valutazione su un core di Magellano. Il risultato è esatto, senza rumore di campionamento (n_shots = 1 "virtuale").</p></details>`,
+esempio:`<p>Per x₁ (secondo bit di a) si legge ⟨X₀X₁X₂X₄⟩: probabilità misurate nella base X, parità dei qubit 0, 1, 2, 4.</p>
+<p>Se esce per esempio +0,31 il bit vale 1; con −0,05 varrebbe 0. Conta solo il <strong>segno</strong>, non quanto è grande il valore.</p>`,
+codice:`<ul><li><span class="ref">src/fast_sim.py</span>: simulatore statevector numpy (default nella campagna).</li>
+<li><span class="ref">src/loss_functions.py:152</span>: <code>get_sim(ansatz).probabilities(x)</code> restituisce le probabilità nelle basi X, Y, Z.</li>
+<li><span class="ref">src/tensor_exp_value.py:124 · build_sign_tensor()</span>: tabella (−1)^parità per tutte le combinazioni.</li>
+<li><span class="ref">src/tensor_exp_value.py · run_with_probabilities()</span>: prodotto segni × probabilità.</li></ul>`},
+
+n7:{t:"Decodifica: dai segni ai fattori", g:"cl",
+breve:`<p>Il risultato della misura si traduce in un candidato fattore in tre passi:</p>
+<ol><li><strong>segno → bit:</strong> x<sub>i</sub> = (1 + sign⟨Π<sub>i</sub>⟩) / 2</li>
+<li><strong>bit → interi:</strong> i primi nbit formano a, gli altri b</li>
+<li><strong>interi → fattori:</strong> p = gcd(a − b, N), q = N / p</li></ol>`,
+come:`<p>Il passo 3 restituisce <em>sempre</em> due numeri con p·q = N, perché il gcd divide N per costruzione. Il punto è se sono <strong>banali</strong>:</p>
+<ul><li>se a = b, allora a − b = 0 e gcd(0, N) = N, quindi p = N, q = 1: fattorizzazione banale;</li>
+<li>se a − b non ha fattori in comune con N, allora gcd = 1, quindi p = 1, q = N: banale anche questa;</li>
+<li>solo se a − b è multiplo di p (o di q), ma non di N, si ottiene un fattore vero.</li></ul>
+<div class="box out">Attenzione: per questo motivo il controllo "p·q = N" da solo non basta. Il flag <code>Sol_Reached</code> dei JSON originali del CESGA vale True anche per le soluzioni banali. Nel fork il successo richiede 1 &lt; p &lt; N.</div>`,
+esempio:`<ul><li>Bit decodificati che danno a = 30, b = 1: gcd(29, 899) = 29, quindi p = 29, q = 31 ✓.</li>
+<li>a = 59, b = 1: gcd(58, 899) = 29 ✓. Fattori giusti, anche se 59² − 1² non è multiplo di 899 (si veda il blocco 8).</li>
+<li>a = b = 5: gcd(0, 899) = 899, quindi p = 899, q = 1 ✗ (banale).</li>
+<li>a = 10, b = 3: gcd(7, 899) = 1, quindi p = 1, q = 899 ✗ (banale).</li></ul>`,
+codice:`<ul><li><span class="ref">src/auxiliar.py:264 · alt_extract_primes()</span>: <code>ising_to_binary(sign(valori))</code> e separazione in a, b.</li>
+<li><span class="ref">src/auxiliar.py:314 · extract_factors()</span>: gcd e divisione intera.</li>
+<li><span class="ref">src/loss_functions.py:230-235</span>: chiamate all'interno di ogni valutazione.</li></ul>`},
+
+n8:{t:"La funzione di costo", g:"cl",
+breve:`<p>A ogni configurazione θ si assegna un numero che dice <strong>quanto è lontana da una soluzione</strong>: più è piccolo, meglio è. È composto da due parti:</p>
+<div class="formula">costo totale = indicatore + 100 · (media<sub>i</sub> ⟨Π<sub>i</sub>⟩²)²</div>
+<p>L'<strong>indicatore</strong> vale 0 se e solo se (a, b) è una soluzione DoTS valida e i fattori non sono banali. Il secondo termine, la <em>regolarizzazione</em>, aiuta l'ottimizzatore.</p>`,
+come:`<h4>L'indicatore (base_loss)</h4>
+<div class="formula">loss_pq = 2N se p = 1 oppure p = N,   altrimenti 0</div>
+<div class="formula">loss_ab = ((a² − b²) mod N)² + N · [δ(a,b) + δ(a² − b², 0)]</div>
+<div class="formula">indicatore = loss_pq + loss_ab</div>
+<ul><li><strong>loss_pq</strong> controlla i fattori: vale 0 se sono veri, 2N se sono banali.</li>
+<li><strong>loss_ab</strong> controlla la condizione DoTS: il resto di a² − b² modulo N, al quadrato, più una penalità se a = b.</li></ul>
+<h4>La regolarizzazione</h4>
+<p>L'indicatore dipende solo dai <em>segni</em> dei correlatori. Al variare di θ resta quindi costante "a gradini": ampi altipiani piatti separati da salti. Il termine 100·(media ⟨Π⟩²)² vale tra 0 e 100 e spinge i correlatori verso valori piccoli (anti-saturazione). In questo modo i segni restano facili da invertire e il paesaggio ha una leggera pendenza anche sugli altipiani.</p>
+<details><summary>Approfondimento: perché si usa un ottimizzatore senza gradienti</summary>
+<p>Un costo a gradini ha gradiente nullo quasi ovunque, quindi i metodi basati sul gradiente (Adam, BFGS, …) non saprebbero in che direzione muoversi. Per questo si usano ottimizzatori "a popolazione" come Differential Evolution o PSO, che confrontano solo valori del costo.</p>
+</details>
+<details><summary>Approfondimento: differenze dal codice originale del CESGA</summary>
+<p>Nel codice originale loss_pq era scritta come <code>popcount(N ⊕ p·q)² + N·[δ(p,N) + δ(q,N) + δ(p,1) + δ(q,1)]</code>: un termine che conta i bit in cui p·q differisce da N, più quattro penalità. Siccome p viene da un gcd e q = N / p, vale sempre p·q = N: il primo termine era identicamente 0 e le penalità scattavano a coppie. Nel fork l'espressione è stata semplificata nella forma qui sopra, con gli stessi valori numerici.</p>
+<p>Il codice originale passava anche due parametri <code>alpha</code> e <code>beta</code> (residui della versione PCE per MaxCut) che non entravano in nessun calcolo. Nel fork sono stati tolti, anche dal JSON di output.</p></details>`,
+esempio:`<table><tr><th>(a, b)</th><th>p, q</th><th class="n">loss_pq</th><th class="n">loss_ab</th><th class="n">indicatore</th><th>esito</th></tr>
+<tr><td>(30, 1)</td><td>29, 31</td><td class="n">0</td><td class="n">0</td><td class="n"><strong>0</strong></td><td>soluzione DoTS: arresto anticipato</td></tr>
+<tr><td>(59, 1)</td><td>29, 31</td><td class="n">0</td><td class="n">783² = 613 089</td><td class="n">613 089</td><td>fattori giusti, ma l'indicatore non è 0</td></tr>
+<tr><td>(5, 5)</td><td>899, 1</td><td class="n">1 798</td><td class="n">1 798</td><td class="n">3 596</td><td>banale</td></tr>
+<tr><td>(10, 3)</td><td>1, 899</td><td class="n">1 798</td><td class="n">91² = 8 281</td><td class="n">10 079</td><td>banale</td></tr></table>
+<p>La riga (59, 1) è il caso del successo "decodificato" (blocco 11): i fattori sono giusti, ma il criterio di arresto non se ne accorge.</p>`,
+codice:`<ul><li><span class="ref">src/loss_functions.py:247</span>: <code>loss_pq</code>.</li>
+<li><span class="ref">src/loss_functions.py:251</span>: <code>loss_ab</code>.</li>
+<li><span class="ref">src/loss_functions.py:260-263</span>: <code>reg_term</code> e <code>nu = 100</code>.</li>
+<li><span class="ref">src/loss_functions.py · fine funzione</span>: viene conservata solo la valutazione con costo totale minimo (modifica del fork per evitare file da GB).</li></ul>`},
+
+n9:{t:"L'ottimizzatore: Differential Evolution", g:"cl",
+breve:`<p>Differential Evolution (DE) è un algoritmo <strong>evolutivo</strong>: mantiene una <em>popolazione</em> di vettori θ (gli "individui") e la migliora generazione dopo generazione, combinando gli individui tra loro e tenendo i figli migliori dei genitori.</p>
+<p>Non usa gradienti, gli servono solo i valori del costo. È adatto a un paesaggio a gradini come quello del blocco 8.</p>`,
+come:`<h4>Una generazione</h4>
+<ol><li>Per ogni individuo θ<sub>i</sub> si costruisce un <strong>mutante</strong> partendo dal migliore attuale:
+<div class="formula">v = θ<sub>best</sub> + F · (θ<sub>r1</sub> − θ<sub>r2</sub>)</div>
+r1 e r2 sono due individui scelti a caso, F è estratto in [0,5; 1] a ogni generazione ("dithering").</li>
+<li><strong>Incrocio</strong> (esponenziale, CR = 0,7): da una posizione casuale, un blocco di coordinate consecutive di θ<sub>i</sub> viene sostituito da quelle del mutante. Il risultato è il <em>vettore di prova</em>.</li>
+<li><strong>Selezione</strong>: si valuta il costo del vettore di prova (blocchi 5→8). Se non è peggiore, prende il posto di θ<sub>i</sub>.</li></ol>
+<p>Una generazione richiede quindi tante valutazioni del circuito quanti sono gli individui.</p>
+<h4>Impostazioni della campagna</h4>
+<table><tr><td>strategia</td><td><code>best1exp</code></td></tr>
+<tr><td>individui</td><td>10 × numero di parametri: 2430 (6 qubit) o 3340 (7 qubit)</td></tr>
+<tr><td>inizializzazione</td><td>sequenza di Halton (quasi-casuale, copre [0, 2π]<sup>D</sup> uniformemente)</td></tr>
+<tr><td>mutazione / incrocio</td><td>F ∈ [0,5; 1], CR = 0,7</td></tr>
+<tr><td>maxiter</td><td>10000 generazioni (budget); <code>tol = atol = 0</code>, cioè nessun arresto per convergenza</td></tr>
+<tr><td>polish</td><td>no (nessuna rifinitura locale finale)</td></tr>
+<tr><td>seed</td><td>il seed del run (0–19): rende il run riproducibile</td></tr></table>
+<details><summary>Approfondimento: quanto costa</summary>
+<p>Con 7 qubit: 3340 valutazioni × 10000 generazioni ≈ 3,3·10⁷ valutazioni. A circa 2,8 ms l'una fanno ≈ 25 ore su un core. Ecco perché un run che non trova la soluzione dura circa un giorno, mentre uno fortunato a 10 bit dura 16 secondi.</p>
+<p>Il codice offre anche PSO e QDPSO (sciami di particelle). La campagna Magellano usa DE come il CESGA per i risultati k = 4.</p></details>`,
+esempio:`<p>N = 899: 243 parametri, quindi <strong>2430 individui</strong>.</p>
+<p>La popolazione iniziale di Halton (2430 valutazioni) più una generazione (altre 2430) fanno 4860 valutazioni. È esattamente quanto si osserva nei run a 10 bit, che trovano la soluzione già alla generazione 1: lo spazio è così piccolo che la popolazione iniziale contiene quasi sempre un individuo vincente. Se i bit decodificati fossero casuali, con 2250 coppie valide su circa 10⁶ ci si aspetterebbero circa 5 individui vincenti già tra i 2430 iniziali.</p>
+<p>A 26 bit invece servono in mediana circa 3000 generazioni (circa 7 ore).</p>`,
+codice:`<ul><li><span class="ref">src/utilities.py:249</span>: dizionario di configurazione di DE.</li>
+<li><span class="ref">src/utilities.py:375</span>: <code>scipy.optimize.differential_evolution(loss_func, bounds=[(0,2π)]·D, callback=…)</code>.</li>
+<li><span class="ref">run_local.py</span>: <code>--seed</code> passato a DE come <code>seed</code>.</li></ul>`},
+
+n10:{t:"Il criterio di arresto", g:"cl",
+breve:`<p>Alla fine di ogni generazione si prende il <strong>miglior individuo</strong> e se ne calcola l'indicatore, cioè il costo senza regolarizzazione:</p>
+<ul><li>se è <strong>0</strong>, la soluzione è trovata e il run si ferma subito (<em>arresto anticipato</em>);</li>
+<li>altrimenti si passa alla generazione successiva, fino al budget di 10000 generazioni.</li></ul>`,
+come:`<p>Il controllo è una funzione <em>callback</em> che scipy chiama dopo ogni generazione. Se restituisce <code>True</code>, DE si interrompe.</p>
+<p>Tre dettagli importanti:</p>
+<ul><li>Si controlla solo il miglior individuo della popolazione, non tutte le valutazioni fatte.</li>
+<li>Si usa l'indicatore puro (vale 0 solo con fattori non banali <em>e</em> condizione DoTS soddisfatta), non il costo totale, che contiene anche la regolarizzazione.</li>
+<li>Non c'è altro criterio: <code>tol = 0</code>, quindi DE non si ferma mai "per convergenza".</li></ul>`,
+esempio:`<p>N = 899: con la coppia (30, 1) l'indicatore vale 0, quindi il run si ferma alla generazione 1.</p>
+<p>Con (59, 1) l'indicatore resta 613 089, il callback non scatta e il run prosegue. Se nessun individuo arriva mai a 0, si arriva a 10000 generazioni.</p>`,
+codice:`<ul><li><span class="ref">src/utilities.py:86 · callback_de_indicator()</span>: legge l'indicatore del migliore e restituisce <code>True</code> se vale 0.</li>
+<li><span class="ref">src/utilities.py:252-255</span>: <code>maxiter</code>, <code>tol = 0</code>, <code>atol = 0</code>.</li></ul>`},
+
+n11:{t:"Il risultato di un run", g:"out",
+breve:`<p>Quando DE si ferma, il codice riprende la configurazione con il <strong>costo totale minimo</strong> vista in tutto il run, la decodifica (blocco 7) e controlla i fattori. Un run può finire in tre modi:</p>
+<table><tr><th>esito</th><th>cosa è successo</th></tr>
+<tr><td><strong style="color:var(--ok)">anticipato</strong></td><td>indicatore = 0 prima di 10000 generazioni: soluzione DoTS piena</td></tr>
+<tr><td><strong style="color:var(--warn)">decodificato</strong></td><td>budget esaurito, ma il gcd della configurazione finale dà comunque i fattori giusti</td></tr>
+<tr><td><strong style="color:var(--bad)">fallito</strong></td><td>budget esaurito e fattori banali (p = 1 o p = N)</td></tr></table>`,
+come:`<h4>Perché può esistere un successo "decodificato"</h4>
+<p>gcd(a − b, N) dà un fattore vero già quando a − b è multiplo di p. Questo può succedere anche se a + b non è multiplo di q, cioè se a² ≢ b² (mod N). In quel caso loss_pq = 0 ma loss_ab &gt; 0: l'indicatore non è zero e il criterio di arresto non scatta, ma la decodifica finale trova i fattori lo stesso.</p>
+<p>C'è anche una seconda ragione: l'arresto guarda solo il miglior individuo a fine generazione, mentre la decodifica finale guarda la migliore fra <em>tutte</em> le valutazioni.</p>
+<div class="box out">Un successo decodificato vale meno di uno anticipato: l'algoritmo non ha raggiunto la condizione che sta ottimizzando, i fattori sono un sottoprodotto. In più costa sempre il budget pieno (circa 25 h con 7 qubit).</div>
+<h4>Cosa viene salvato</h4>
+<p>Un JSON per run con p, q, numero di generazioni (<code>Number of iterations</code>), valutazioni (<code>function_evaluations</code>), tempo, qubit, parametri e il flag <code>Sol_Reached</code>. In più un CSV con il costo migliore a ogni generazione. Entrambi sono scritti <em>solo alla fine</em> del run.</p>`,
+esempio:`<p>N = 899 nella campagna: 20 run su 20 anticipati, mediana 1 generazione, circa 16 s.</p>
+<p>Un esito "decodificato" sarebbe un run in cui la configurazione finale dà per esempio (59, 1): fattori 29 × 31 corretti, ma indicatore ≠ 0 per tutte le 10000 generazioni.</p>`,
+codice:`<ul><li><span class="ref">src/exe_fact.py:254-258</span>: sceglie la valutazione di costo minimo (l'ultima in caso di parità).</li>
+<li><span class="ref">src/exe_fact.py:270-277</span>: <code>Sol_Reached</code> vero solo se <code>p·q == N</code> e <code>1 &lt; p &lt; N</code> (correzione del fork).</li>
+<li><span class="ref">src/exe_fact.py:332 · append_result_to_json()</span>: scrittura del JSON.</li>
+<li>Percorso su Magellano: <code>output/&lt;TAG&gt;/N&lt;N&gt;/seed_&lt;s&gt;/Resultados/Factorization/k_4/Numpy/…</code></li></ul>`},
+
+n12:{t:"Dalla singola esecuzione alla statistica", g:"out",
+breve:`<p>Un run dipende dal caso (la popolazione iniziale e le scelte casuali di DE), quindi un singolo run non dice molto.</p>
+<p>Per ogni N si ripete il run con <strong>20 seed</strong> diversi e si stima la <strong>probabilità di successo</strong> ps = successi / run, con il suo intervallo di confidenza. Poi si confronta con i risultati originali del CESGA.</p>`,
+come:`<h4>Intervallo di Wilson al 95%</h4>
+<p>Con pochi run, "20 su 20" non significa ps = 1. L'intervallo di Wilson dice quali valori di ps sono compatibili con i dati: con 20/20 si ottiene [0,84; 1]. Due campagne sono considerate "compatibili" se i loro intervalli si sovrappongono (criterio indicativo, non un test formale).</p>
+<h4>Time-to-solution (TTS)</h4>
+<p>Per confrontare algoritmi si usa spesso il tempo necessario per trovare la soluzione con il 99% di probabilità, ripetendo il run:</p>
+<div class="formula">TTS = t<sub>run</sub> · ln(1 − 0,99) / ln(1 − ps)</div>
+<p>Un ps basso fa esplodere il TTS anche se il singolo run è veloce.</p>
+<h4>Una trappola: run lenti = run falliti</h4>
+<p>I run riusciti si fermano presto, quelli falliti arrivano a 10000 generazioni e finiscono per ultimi. Una statistica calcolata a campagna non conclusa è quindi <strong>ottimista</strong>: va rifatta quando tutti i run sono finiti.</p>`,
+esempio:`<table><tr><th class="n">bit</th><th>Magellano (parziale)</th><th>CESGA</th></tr>
+<tr><td class="n">10–22</td><td>20/20 per ogni N</td><td>40/40</td></tr>
+<tr><td class="n">24</td><td>17/17 (3 run in corso)</td><td>47/47</td></tr>
+<tr><td class="n">26</td><td>11/11 (9 in corso)</td><td>37/40</td></tr>
+<tr><td class="n">30–39</td><td>in corso</td><td>3/42, 3/41, 1/50 (dec.), 1/50 (dec.), 0/250</td></tr></table>
+<p>Dati al 24/11/2026. Oltre i 30 bit DE non trova quasi mai la condizione DoTS entro il budget: è il risultato centrale del paper, e lo stiamo verificando in modo indipendente.</p>`,
+codice:`<ul><li><span class="ref">magellano/magellano_pce.sbatch</span>: array 0–279 (14 N × 20 seed), walltime 48 h.</li>
+<li><span class="ref">magellano_results/_scripts/analyze_cesga.py</span>: ps, intervalli di Wilson, anticipati + decodificati, confronto con il CESGA.</li>
+<li><span class="ref">magellano/pull_results.sh</span>: recupero dei risultati dal cluster.</li></ul>`}
+};
+
+const GLOSS = [
+["Semiprimo","Numero prodotto di esattamente due primi, N = p·q."],
+["gcd (massimo comun divisore)","Il più grande intero che divide due numeri. Si calcola rapidamente con l'algoritmo di Euclide: gcd(a, b) = gcd(b, a mod b)."],
+["Congruenza (mod N)","a ≡ b (mod N) significa che a e b danno lo stesso resto nella divisione per N, cioè che N divide a − b."],
+["DoTS","Difference of Two Squares: trovare a² ≡ b² (mod N) con a ≢ ±b, da cui gcd(a − b, N) è un fattore."],
+["Qubit","Unità di informazione quantistica. Uno stato di n qubit è descritto da 2ⁿ ampiezze complesse."],
+["Matrici di Pauli","X (inversione del bit), Y, Z (inversione di fase). Una stringa di Pauli è un prodotto tensoriale, per esempio X₀X₁X₂X₄ agisce con X sui qubit 0, 1, 2, 4."],
+["Valore d'aspettazione ⟨Π⟩","Il valore medio dell'osservabile Π misurato sullo stato. Per una stringa di Pauli è compreso tra −1 e +1."],
+["Correlatore","Valore d'aspettazione di una stringa di Pauli su più qubit: misura quanto sono correlati i loro esiti (parità)."],
+["PCE","Pauli Correlation Encoding: codifica ogni variabile binaria nel segno di un correlatore su k qubit, così m variabili richiedono solo circa m^(1/k) qubit."],
+["k (ordine di compressione)","Numero di qubit coinvolti da ogni stringa di Pauli. Più è grande, meno qubit servono, ma il circuito deve essere più profondo."],
+["Ansatz","Il circuito parametrico scelto a priori. La sua forma è fissa, gli angoli θ sono le incognite."],
+["Algoritmo variazionale (VQA)","Schema ibrido: un circuito quantistico parametrico valuta una funzione di costo, un ottimizzatore classico ne aggiorna i parametri."],
+["Statevector","Simulazione esatta dello stato quantistico (vettore di 2ⁿ ampiezze), senza rumore di misura."],
+["Differential Evolution","Ottimizzatore evolutivo senza gradienti: popolazione di soluzioni, mutazione per differenze, incrocio, selezione."],
+["Generazione","Un passo di DE: ogni individuo della popolazione produce e valuta un vettore di prova."],
+["Funzione di costo / indicatore","Il numero da minimizzare. L'indicatore è la parte che vale 0 esattamente sulle soluzioni."],
+["Regolarizzazione","Termine aggiunto al costo per renderlo più facile da ottimizzare, senza cambiare dove sono le soluzioni."],
+["Seed","Numero che inizializza il generatore casuale: stesso seed, stesso run."],
+["ps, IC95, Wilson","Probabilità di successo stimata e il suo intervallo di confidenza al 95% (formula di Wilson, adatta a pochi campioni)."],
+["TTS","Time-to-solution: tempo atteso per avere la soluzione con probabilità 99% ripetendo il run."],
+["Anticipato / decodificato","Successo con arresto per indicatore = 0, oppure successo ottenuto solo dalla decodifica finale a budget esaurito."]
+];
+
+/* --------------------------- pannello --------------------------- */
+let cur = "n1", curTab = "breve";
+const panel = document.getElementById("panel");
+function renderPanel(){
+  const n = NODES[cur], g = GROUPS[n.g], i = ORDER.indexOf(cur);
+  panel.innerHTML = `
+   <div class="crumb"><a onclick="select('n1')">Vista d'insieme</a> › blocco ${i+1} di ${ORDER.length}</div>
+   <h2 class="ptitle">${n.t}</h2>
+   <span class="ptag" style="color:${g[1]};background:${g[2]}">${g[0]}</span>
+   <div class="tabs" role="tablist">${TABS.map(([k,l])=>`<button role="tab" aria-selected="${k===curTab}" onclick="setTab('${k}')">${l}</button>`).join("")}</div>
+   <div class="pbody">${n[curTab]}</div>
+   <div class="pnav">
+     <button ${i===0?"disabled":""} onclick="step(-1)">← ${i>0?NODES[ORDER[i-1]].t:""}</button>
+     <button ${i===ORDER.length-1?"disabled":""} onclick="step(1)">${i<ORDER.length-1?NODES[ORDER[i+1]].t:""} →</button>
+   </div>`;
+  document.querySelectorAll(".node").forEach(el=>el.classList.toggle("sel", el.dataset.id===cur));
+}
+function select(id){ cur=id; renderPanel(); if (window.innerWidth<1100) panel.scrollIntoView({behavior:"smooth",block:"start"}); }
+function setTab(t){ curTab=t; renderPanel(); }
+function step(d){ const i=ORDER.indexOf(cur)+d; if(i>=0&&i<ORDER.length){cur=ORDER[i];renderPanel();} }
+document.querySelectorAll(".node").forEach(el=>{
+  el.addEventListener("click",()=>select(el.dataset.id));
+  el.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();select(el.dataset.id);} });
+});
+document.addEventListener("keydown",e=>{
+  if(!document.getElementById("v-diagram").classList.contains("active")) return;
+  if(e.target.tagName==="INPUT"||e.target.tagName==="SELECT") return;
+  if(e.key==="ArrowRight") step(1); if(e.key==="ArrowLeft") step(-1);
+});
+
+/* --------------------------- viste --------------------------- */
+function go(v){
+  document.querySelectorAll(".view").forEach(s=>s.classList.toggle("active", s.id===v));
+  document.querySelectorAll("nav.top button").forEach(b=>b.setAttribute("aria-current", b.dataset.view===v));
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+document.querySelectorAll("nav.top button").forEach(b=>b.addEventListener("click",()=>go(b.dataset.view)));
+
+/* --------------------------- calcoli --------------------------- */
+const comb=(n,k)=>{ if(k<0||k>n) return 0; let r=1; for(let i=1;i<=k;i++) r=r*(n-k+i)/i; return Math.round(r); };
+function combos(n,k,limit){ const out=[], c=[...Array(k).keys()]; if(k>n) return out;
+  while(out.length<limit){ out.push(c.slice()); let i=k-1; while(i>=0&&c[i]===n-k+i) i--; if(i<0) break; c[i]++; for(let j=i+1;j<k;j++) c[j]=c[j-1]+1; }
+  return out; }
+function sizes(N,k){
+  const nb=N.toString(2).length, m=2*nb;
+  let n=k; while(3*comb(n,k)<m) n++;
+  const L=Math.ceil(1.5*Math.pow(n,Math.floor(k/2)));
+  const R=Math.ceil(L/2), E=Math.floor(L/2), pr=Math.floor(n/2);
+  const params = n + (R-1)*2*pr + E*pr;
+  const ls=Math.floor(m/3);
+  return {nb,m,n,L,params,ls,nz:m-2*ls,cap:3*comb(n,k),pop:10*params};
+}
+const MS = {"4,6":1.9,"4,7":2.8}; // ms per valutazione, backend numpy, 1 core Magellano
+const fmt = x => x.toLocaleString("it-IT");
+const SUP={"0":"⁰","1":"¹","2":"²","3":"³","4":"⁴","5":"⁵","6":"⁶","7":"⁷","8":"⁸","9":"⁹","-":"⁻"};
+const sci = x => { const [m,e]=x.toExponential(1).split("e"); return m.replace(".",",")+"·10"+String(+e).split("").map(c=>SUP[c]).join(""); };
+function parseBig(s){ s=String(s).trim(); if(!/^\d+$/.test(s)) return null; return BigInt(s); }
+
+function renderSizes(){
+  const N=parseBig(document.getElementById("szN").value), k=+document.getElementById("szK").value;
+  const out=document.getElementById("szOut"), map=document.getElementById("szMap"), note=document.getElementById("szNote");
+  if(N===null||N<6n){ out.innerHTML=""; map.innerHTML=""; note.textContent="Inserisci un intero N ≥ 6."; return; }
+  const s=sizes(N,k);
+  const ms=MS[k+","+s.n], hours= ms? (10000*s.pop*ms/3.6e6) : null;
+  const st=[["bit di N",s.nb],["incognite m = 2·nbit",s.m],["qubit n",s.n],["stringhe disponibili",s.cap],
+   ["strati del circuito",s.L],["parametri θ",s.params],["individui DE",fmt(s.pop)],["valutazioni a budget pieno",sci(10000*s.pop)],
+   ["run a budget pieno (1 core)", hours? "≈ "+hours.toFixed(0)+" h" : "—"]];
+  out.innerHTML=st.map(([k,v])=>`<div class="stat"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+  const lost=Math.max(0, s.nz-comb(s.n,k), s.ls-comb(s.n,k));
+  note.innerHTML=(lost?`<strong style="color:var(--bad)">Attenzione: la base Z dovrebbe codificare ${s.nz} bit ma con ${s.n} qubit esistono solo ${comb(s.n,k)} stringhe per tipo. ${lost} bit di b non è codificato (limite del codice originale).</strong> `:"")+`${s.ls} bit su stringhe <span class="tag-x">X</span>, ${s.ls} su <span class="tag-y">Y</span>, ${s.nz} su <span class="tag-z">Z</span>. Senza PCE servirebbero ${s.m} qubit.${ms?"":" (Tempo stimato solo per k = 4 con 6–7 qubit, misurato su Magellano.)"}`;
+  const cs=combos(s.n,k,Math.max(s.ls,s.nz));
+  const P=["X","Y","Z"], cls=["tag-x","tag-y","tag-z"];
+  let rows="";
+  for(let i=0;i<s.m;i++){
+    const t = i<s.ls?0 : i<2*s.ls?1:2, j = t===0?i : t===1? i-s.ls : i-2*s.ls;
+    const owner = i<s.nb? `a, bit ${i} (peso 2<sup>${i}</sup>)` : `b, bit ${i-s.nb} (peso 2<sup>${i-s.nb}</sup>)`;
+    const str = cs[j] ? cs[j].map(q=>`${P[t]}<sub>${q}</sub>`).join("") : null;
+    rows+= str ? `<tr><td class="n">x<sub>${i}</sub></td><td>${owner}</td><td class="${cls[t]}">${str}</td></tr>`
+               : `<tr><td class="n">x<sub>${i}</sub></td><td>${owner}</td><td style="color:var(--bad);font-weight:600">nessuna stringa disponibile: bit perso</td></tr>`;
+  }
+  map.innerHTML=`<table><tr><th class="n">bit</th><th>appartiene a</th><th>correlatore Π<sub>i</sub> (bit = 1 ⇔ ⟨Π<sub>i</sub>⟩ &gt; 0)</th></tr>${rows}</table>`;
+}
+const SZ_EX=[["10 bit",899],["22 bit",3819047],["26 bit",40072889],["39 bit",446718216403]];
+document.getElementById("sizeChips").innerHTML=SZ_EX.map(([l,v])=>`<button onclick="szSet('${v}')">${l}: ${v}</button>`).join("");
+function szSet(v){ document.getElementById("szN").value=v; renderSizes(); }
+["szN","szK"].forEach(id=>document.getElementById(id).addEventListener("input",renderSizes));
+
+function gcd(a,b){ a=a<0n?-a:a; b=b<0n?-b:b; while(b){[a,b]=[b,a%b];} return a; }
+const mod=(x,n)=>((x%n)+n)%n;
+const popc=x=>{let c=0; while(x){c+=Number(x&1n); x>>=1n;} return c;};
+function bitsOf(x,nb){ let s=""; for(let i=0;i<nb;i++){ const b=(x>>BigInt(i))&1n; s+=`<span class="bit ${b?"one":"zero"}">${b}</span>`; } return s; }
+function renderLoss(){
+  const N=parseBig(document.getElementById("lsN").value), a=parseBig(document.getElementById("lsA").value), b=parseBig(document.getElementById("lsB").value);
+  const out=document.getElementById("lsOut");
+  if(N===null||a===null||b===null||N<6n){ out.innerHTML=`<p class="hint">Inserisci interi non negativi, N ≥ 6.</p>`; return; }
+  const nb=N.toString(2).length, lim=(1n<<BigInt(nb));
+  let warn="";
+  if(a>=lim||b>=lim) warn=`<p class="hint" style="color:var(--warn)">Nota: con ${nb} bit il circuito può rappresentare solo valori da 0 a ${fmt(lim-1n)}.</p>`;
+  const g=gcd(a-b,N), p=g, q=N/g;
+  const d=x=>x?1n:0n;
+  const lpq=BigInt(popc(N^(p*q)))**2n + N*(d(p===N)+d(q===N)+d(p===1n)+d(q===1n));
+  const D=(a-b)*(a+b), r=mod(D,N);
+  const lab=r*r + N*(d(a===b)+d(D===0n));
+  const ind=lpq+lab, real = p>1n && p<N;
+  let v;
+  if(ind===0n) v=`<div class="verdict ok">Indicatore = 0: soluzione DoTS valida. Il run si fermerebbe qui (successo anticipato).</div>`;
+  else if(real) v=`<div class="verdict warn">Fattori giusti ma indicatore ≠ 0: il criterio di arresto non scatta. Se fosse la configurazione finale, sarebbe un successo solo decodificato.</div>`;
+  else v=`<div class="verdict bad">Fattorizzazione banale (p = ${p===1n?"1":"N"}): fallimento, penalizzato con N per ogni condizione banale.</div>`;
+  out.innerHTML=`${warn}
+   <div class="bits"><div>a = ${fmt(a)} → ${bitsOf(a,nb)}</div><div>b = ${fmt(b)} → ${bitsOf(b,nb)}</div></div>
+   <p class="hint">bit in ordine LSB → MSB, come x<sub>0</sub>…x<sub>${nb-1}</sub> (a) e x<sub>${nb}</sub>…x<sub>${2*nb-1}</sub> (b)</p>
+   <table>
+    <tr><td>gcd(a − b, N)</td><td class="n">gcd(${fmt(a-b)}, ${fmt(N)}) = <strong>${fmt(g)}</strong></td></tr>
+    <tr><td>p, q = N / p</td><td class="n">${fmt(p)} × ${fmt(q)}</td></tr>
+    <tr><td>(a² − b²) mod N</td><td class="n">${fmt(r)}</td></tr>
+    <tr><td>loss_pq</td><td class="n">${fmt(lpq)}</td></tr>
+    <tr><td>loss_ab</td><td class="n">${fmt(lab)}</td></tr>
+    <tr><td><strong>indicatore</strong></td><td class="n"><strong>${fmt(ind)}</strong></td></tr>
+   </table>${v}`;
+}
+const LS_EX=[["Fermat: 30, 1","899","30","1"],["solo decodificato: 59, 1","899","59","1"],["banale: 5, 5","899","5","5"],["banale: 10, 3","899","10","3"],["altra soluzione: 61, 32","899","61","32"]];
+document.getElementById("lossChips").innerHTML=LS_EX.map(([l,n,a,b])=>`<button onclick="lsSet('${n}','${a}','${b}')">${l}</button>`).join("");
+function lsSet(n,a,b){ document.getElementById("lsN").value=n; document.getElementById("lsA").value=a; document.getElementById("lsB").value=b; renderLoss(); }
+["lsN","lsA","lsB"].forEach(id=>document.getElementById(id).addEventListener("input",renderLoss));
+
+/* --------------------------- circuito --------------------------- */
+function pairsAt(l,n){
+  const s=Math.ceil(l/2); let arr=[]; for(let q=s-1;q<n+s-1;q++) arr.push(q>n-1? q-n : q);
+  const p=[]; for(let i=1;i<arr.length;i+=2) p.push([arr[i-1],arr[i]]); return p;
+}
+function renderCirc(){
+  const n=+document.getElementById("ciN").value, Ls=+document.getElementById("ciL").value;
+  const dx=58, dy=34, x0=40, y0=30, W=x0+Ls*dx+20, H=y0+n*dy+10;
+  let s=`<svg class="circ" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">`;
+  for(let q=0;q<n;q++){ const y=y0+q*dy; s+=`<line class="wire" x1="${x0-6}" y1="${y}" x2="${W-10}" y2="${y}"/><text class="ql" x="4" y="${y+4}">q${q}</text>`; }
+  let ctr=0;
+  for(let l=0;l<Ls;l++){
+    const pairs=pairsAt(l,n), cx=x0+l*dx+dx/2;
+    const lbl = l%2===0 ? ["RZ","RX","RY"][ctr%3] : ["RZZ","RXX","RYY"][ctr%3]; ctr++;
+    s+=`<text class="ll" x="${cx}" y="12" text-anchor="middle">${l}</text>`;
+    if(l%2===0){
+      const act=new Set(pairs.flat());
+      for(let q=0;q<n;q++) if(l===0||act.has(q)){ const y=y0+q*dy; s+=`<rect class="gr" x="${cx-17}" y="${y-10}" width="34" height="20" rx="4"/><text x="${cx}" y="${y+3.5}" text-anchor="middle">${lbl}</text>`; }
+    } else {
+      pairs.forEach(([a,b])=>{
+        if(a<0||b<0) return;
+        const ya=y0+a*dy, yb=y0+b*dy, adj=Math.abs(a-b)===1;
+        if(adj){ const yt=Math.min(ya,yb)-10, h=Math.abs(ya-yb)+20; s+=`<rect class="ge" x="${cx-19}" y="${yt}" width="38" height="${h}" rx="5"/><text x="${cx}" y="${(ya+yb)/2+3.5}" text-anchor="middle">${lbl.slice(1)}</text>`; }
+        else { [ya,yb].forEach(y=>{ s+=`<rect class="ge" x="${cx-19}" y="${y-10}" width="38" height="20" rx="5"/><text x="${cx}" y="${y+3.5}" text-anchor="middle">${lbl.slice(1)}</text>`; });
+               s+=`<line class="gl2" stroke-dasharray="3 3" x1="${cx+21}" y1="${ya}" x2="${cx+21}" y2="${yb}"/>`; }
+      });
+    }
+  }
+  s+="</svg>";
+  const st=sizes( (n===7? 446718216403n : 899n), 4);
+  document.getElementById("ciOut").innerHTML=s+`<p class="hint">Viola: rotazioni su 1 qubit. Verde: rotazioni su 2 qubit (XX = RXX, …); il tratteggio indica una coppia "a cavallo" tra l'ultimo e il primo qubit. Ogni casella è un parametro θ<sub>j</sub>.${n>=6?` Con k = 4 il circuito completo per ${n} qubit ha ${st.L} strati e ${st.params} parametri.`:""}</p>`;
+}
+["ciN","ciL"].forEach(id=>document.getElementById(id).addEventListener("input",renderCirc));
+
+/* --------------------------- glossario --------------------------- */
+document.getElementById("glossary").innerHTML=GLOSS.map(([t,d])=>`<dt>${t}</dt><dd>${d}</dd>`).join("");
+
+renderPanel(); renderSizes(); renderLoss(); renderCirc();
+const H={"#lab":"v-lab","#glossario":"v-gloss"}; if(H[location.hash]) go(H[location.hash]);
+</script>
+</body>
+</html>
