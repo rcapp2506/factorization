@@ -122,9 +122,6 @@ def ejecutar_fact(
     # riprodurre i risultati CESGA; qui lo si segnala soltanto.
     n_strings = math.comb(qubits, k)
     n_z = m - 2 * list_size
-    # Bit di b non codificati (0 nel caso normale): finisce nel JSON di output,
-    # così i run affetti si riconoscono nell'analisi senza rileggere i log.
-    b_bits_missing = max(0, n_z - n_strings)
     if n_z > n_strings:
         print(f"⚠️  [fork] {n_z} variabili sulla base Z ma solo {n_strings} stringhe di Pauli "
               f"disponibili con {qubits} qubit e k={k}: b è codificato con "
@@ -309,7 +306,6 @@ def ejecutar_fact(
         "num_params": num_params,
         "params": params.tolist(),
         "Sol_Reached" : Solution_Reached,
-        "b_bits_missing": b_bits_missing,
         "a_int": int(a_int),
         "b_int": int(b_int),
         "p_int": int(p_int),
