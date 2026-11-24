@@ -42,10 +42,13 @@ serve la formulazione a colonne con variabili di carry (coefficienti limitati,
 QUBO sparso). `build_factorization_qubo` emette un warning quando si supera 2^53.
 
 NOTA sul benchmark. Il ramo PCE/DoTS di questo repo (FAO_DoTS) NON minimizza
-questo QUBO: usa una cost function diretta e non polinomiale (congruenza di
-Fermat a^2 = b^2 mod N, gcd, popcount di N XOR p*q). Per un confronto a parità di
-funzione costo si può far valutare a PCE l'energia di QUESTO QUBO
-(`qubo_energy`) invece della loss DoTS.
+questo QUBO: usa una cost function diretta e non polinomiale, basata sulla
+congruenza di Fermat a^2 = b^2 mod N, cioè ((a-b)(a+b) mod N)^2, con p ricavato
+da gcd(a-b, N) e penalità sulle soluzioni banali. Il termine popcount(N XOR p*q)
+descritto nell'articolo CESGA è identicamente nullo, perché p*q = N per
+costruzione (vedi FORK_NOTES.md). Per un confronto a parità di funzione costo
+si può far valutare a PCE l'energia di QUESTO QUBO (`qubo_energy`) invece della
+loss DoTS.
 """
 
 from __future__ import annotations

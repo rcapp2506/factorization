@@ -50,7 +50,9 @@ il bit più significativo di `b` non è codificato e `b` ha un bit in meno, senz
 errori. Con k=4 (fino a 7 qubit) succede per N a 7, 22 e 52 bit; nella campagna CESGA k=4 solo
 per N = 3819047 (22 bit, `b` su 21 bit). Il comportamento non è stato corretto
 per restare confrontabili con i risultati CESGA: `ejecutar_fact` stampa un
-avviso.
+avviso e scrive nel JSON di output il campo `b_bits_missing` (numero di bit di
+`b` non codificati, 0 nel caso normale), da usare per marcare o escludere quei
+run nell'analisi. I JSON prodotti prima di questa modifica non hanno il campo.
 
 ## Esecuzione locale
 
