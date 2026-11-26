@@ -57,7 +57,8 @@ def filtrar_combinaciones(combos, indice, valor):
 
 
 
-def ejecutar_experimentos(exp_list, optimizer_params, maxiter, n_shots, nqpus, cunqa_str, family_name):   
+def ejecutar_experimentos(exp_list, optimizer_params, maxiter, n_shots, nqpus, cunqa_str, family_name,
+                          variant="serial", workers=1):   
     """
     Ejecuta un experimento de MaxCut para una combinación de parámetros dada.
 
@@ -139,7 +140,9 @@ def ejecutar_experimentos(exp_list, optimizer_params, maxiter, n_shots, nqpus, c
         n_shots=n_shots,
         nqpus=nqpus,
         cunqa_str_arg=cunqa_str,
-        family_name=family_name
+        family_name=family_name,
+        variant=variant,
+        workers=workers
     )
 
     # === 5. Devolver las rutas creadas ===

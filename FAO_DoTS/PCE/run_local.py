@@ -17,6 +17,12 @@ Uso:
 --backend numpy (default) | aer. "numpy" usa src/fast_sim.py: stesse probabilità
          esatte di Aer, ~5-9x più veloce (tests/check_numpy_backend.py). I
          risultati finiscono in Resultados/.../Numpy/ invece di .../Simulation/.
+--variant serial (default) | parallel. Riproduce le due versioni del CESGA:
+         serial = FAO_DoTS/PCE (costo con regolarizzazione, DE "immediate"),
+         parallel = FAO_DoTS/PCE_parallel (senza regolarizzazione, penalità su
+         (a-b) = 0 mod N, DE "deferred", decodifica del migliore di DE).
+--workers processi per la variante parallel; con lo stesso seed il run è
+         identico per qualsiasi numero di workers.
 
 Il CSV con una riga per valutazione si scrive solo con PCE_LOG_EVALS=1 (con k=4
 è ~1 GB per run); quello per generazione (*_iter.csv) si scrive sempre.
@@ -42,7 +48,15 @@ def main():
                     help="Cartella in cui scrivere Resultados/ (default: cartella corrente)")
     ap.add_argument("--backend", default="numpy", choices=["numpy", "aer"],
                     help="Simulatore statevector: numpy (default, veloce) o aer (riferimento)")
+    ap.add_argument("--variant", default="serial", choices=["serial", "parallel"],
+                    help="serial = FAO_DoTS/PCE (default); parallel = FAO_DoTS/PCE_parallel, "
+                         "con cui sono stati prodotti quasi tutti i risultati k=4 pubblicati")
+    ap.add_argument("--workers", type=int, default=1,
+                    help="Processi per valutare la popolazione di DE (solo --variant parallel; "
+                         "il risultato non dipende da questo numero)")
     args = ap.parse_args()
+    if args.workers > 1 and args.variant != "parallel":
+        ap.error("--workers > 1 richiede --variant parallel")
     mode = {"numpy": "Numpy", "aer": "Simulation"}[args.backend]
 
     optimizer_params = None
@@ -60,7 +74,8 @@ def main():
 
     combos = casuistica_experimento(["Factorization"], [args.num], [args.optimizer], [args.k])
     for combo in combos:
-        print(f"\n[run_local] esperimento: {combo}  seed={args.seed}  backend={args.backend}  outdir={os.getcwd()}")
+        print(f"\n[run_local] esperimento: {combo}  seed={args.seed}  backend={args.backend}  "
+              f"variant={args.variant}  workers={args.workers}  outdir={os.getcwd()}")
         ruta_csv, ruta_csv_iter = ejecutar_experimentos(
             exp_list=combo,
             optimizer_params=optimizer_params,
@@ -69,6 +84,8 @@ def main():
             nqpus=None,
             cunqa_str=mode,
             family_name=None,
+            variant=args.variant,
+            workers=args.workers,
         )
         print(f"[run_local] CSV per generazione: {os.path.join(os.getcwd(), ruta_csv_iter)}")
 

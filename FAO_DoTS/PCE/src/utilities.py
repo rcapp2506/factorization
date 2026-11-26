@@ -19,6 +19,28 @@ import os
 from functools import partial
 
 
+# =========================================================
+# NOTE (fork): valutazione in parallelo per la variante "parallel"
+# =========================================================
+# Ogni processo del pool riceve una volta sola (initializer) tutto ciò che
+# serve a valutare il costo e costruisce il simulatore una volta sola; poi
+# valuta solo vettori x. Con updating="deferred" il risultato di DE non dipende
+# dal numero di processi: con lo stesso seed workers=1 e workers=W danno lo
+# stesso run.
+_WORKER_ARGS = {}
+
+
+def _worker_init(args):
+    _WORKER_ARGS.clear()
+    _WORKER_ARGS.update(args)
+
+
+def _worker_eval(x):
+    from src.loss_functions import loss_func_estimator
+    total, _ = loss_func_estimator(x=x, experiment_result=[], **_WORKER_ARGS)
+    return total
+
+
 def run_vqe_optimization(
     sim,
     n_shots,
@@ -34,10 +56,17 @@ def run_vqe_optimization(
     maxiter=1000,
     log_csv_path=None,
     cunqa_str="None",
-    family_name=None
+    family_name=None,
+    variant="serial",
+    workers=1
 ):
     """
     Ejecuta una optimización variacional (VQE) sobre un ansatz cuántico dado.
+
+    variant: "serial" (FAO_DoTS/PCE) o "parallel" (FAO_DoTS/PCE_parallel):
+    costo, aggiornamento di DE, criterio di arresto e configurazione finale
+    come nelle due versioni del CESGA. workers: processi per valutare la
+    popolazione di DE (solo variante "parallel").
 
     Retorna:
     --------
@@ -86,6 +115,15 @@ def run_vqe_optimization(
     def callback_de_indicator(intermediate_result):
         iteration_costs.append(intermediate_result.fun)
 
+        # NOTE (fork): variante "parallel": il costo non ha regolarizzazione,
+        # quindi coincide con l'indicatore; si ferma quando il migliore vale 0
+        # (come callback_de_fac in PCE_parallel), senza valutazioni in più.
+        if variant == "parallel":
+            if intermediate_result.fun == 0.0:
+                print("🎯 Se alcanzó exactamente 0.0")
+                return True
+            return False
+
         # NOTE (fork): il migliore della popolazione di DE è la valutazione di
         # loss minima vista finora, cioè quella conservata in experiment_result
         # insieme alla sua loss base. La si legge da lì invece di rivalutare il
@@ -126,7 +164,8 @@ def run_vqe_optimization(
                 n_shots=n_shots,
                 experiment_result=experiment_result,
                 CUNQA=cunqa_str,
-                family_name=family_name
+                family_name=family_name,
+                variant=variant
             )
             cache["last_x"] = tuple(x)
             cache["total"] = total
@@ -151,7 +190,8 @@ def run_vqe_optimization(
                     n_shots=n_shots,
                     experiment_result=experiment_result,
                     CUNQA=cunqa_str,
-                    family_name=family_name
+                    family_name=family_name,
+                    variant=variant
                 )
                 return base
 
@@ -372,12 +412,51 @@ def run_vqe_optimization(
 
         elif optimizer_lower == "differentialevolution":
 
-            result = differential_evolution(
-                loss_func,
-                bounds=[(0, 2*np.pi)] * len(initial_params),
-                callback=callback_de_indicator,
-                **opt_config["kwargs"]
-            )
+            if variant == "parallel":
+                # NOTE (fork): come PCE_parallel: aggiornamento "deferred" della
+                # popolazione, valutazioni distribuite su `workers` processi.
+                de_kwargs = dict(opt_config["kwargs"], updating="deferred")
+                worker_args = dict(
+                    ansatz=compiled_circuit, sim=sim, N_int=N_int,
+                    num_a_bits=num_a_bits, num_b_bits=num_b_bits,
+                    list_size=list_size,
+                    num_qubits=compiled_circuit[0].num_qubits, d_t=d_t,
+                    n_shots=n_shots, CUNQA=cunqa_str, family_name=family_name,
+                    variant=variant)
+                if workers > 1:
+                    import multiprocessing as mp
+                    with mp.get_context("fork").Pool(
+                            workers, initializer=_worker_init,
+                            initargs=(worker_args,)) as pool:
+                        result = differential_evolution(
+                            _worker_eval,
+                            bounds=[(0, 2*np.pi)] * len(initial_params),
+                            callback=callback_de_indicator,
+                            workers=pool.map,
+                            **de_kwargs
+                        )
+                else:
+                    result = differential_evolution(
+                        loss_func,
+                        bounds=[(0, 2*np.pi)] * len(initial_params),
+                        callback=callback_de_indicator,
+                        workers=1,
+                        **de_kwargs
+                    )
+
+                # Come PCE_parallel: la configurazione decodificata a fine run
+                # è il migliore di DE (result.x), rivalutato qui.
+                experiment_result.clear()
+                loss_func_estimator(
+                    x=result.x, experiment_result=experiment_result,
+                    **worker_args)
+            else:
+                result = differential_evolution(
+                    loss_func,
+                    bounds=[(0, 2*np.pi)] * len(initial_params),
+                    callback=callback_de_indicator,
+                    **opt_config["kwargs"]
+                )
 
         elif optimizer_lower == "brute":
 

@@ -17,12 +17,22 @@
 #   NUMBERS  file dei semiprimi, assoluto o relativo a $CODE_DIR
 #            (default Numbers_test.txt; es. magellano/numbers_cesga_k4.txt)
 #   TAG      nome della cartella di output (default k<K>_<OPT>_it<MAXITER>)
+#   VARIANT  serial (default, FAO_DoTS/PCE) | parallel (FAO_DoTS/PCE_parallel,
+#            la versione con cui sono stati prodotti quasi tutti i risultati
+#            k=4 del CESGA). Con parallel la popolazione di DE è valutata su
+#            SLURM_CPUS_PER_TASK processi (1 thread BLAS ciascuno): chiedere i
+#            core con --cpus-per-task e la memoria con --mem (~0.3 GB a core).
 #
 # Output: $BASE/output/<TAG>/N<N>/seed_<s>/Resultados/...
 #
 # Campagna CESGA k=4 (14 semiprimi × 20 seed, budget 10000, run fino a ~1 giorno):
 #   sbatch --array=0-279%280 --time=48:00:00 \
 #          --export=ALL,R=20,K=4,MAXITER=10000,NUMBERS=magellano/numbers_cesga_k4.txt,TAG=cesga_k4_it10000 \
+#          magellano_pce.sbatch
+#
+# Campagna con la variante parallela (stessi semiprimi, 16 core per run):
+#   sbatch --array=<indici> --cpus-per-task=16 --mem=8G --time=12:00:00 \
+#          --export=ALL,R=50,K=4,MAXITER=10000,VARIANT=parallel,NUMBERS=magellano/numbers_cesga_k4.txt,TAG=cesga_k4_it10000_parallel \
 #          magellano_pce.sbatch
 #
 # Avvio:
@@ -49,6 +59,14 @@ source /gpfs/ddn/cta/cappu/factorization/slurm/magellano_common.sh
 : "${BACKEND:=numpy}"
 : "${NUMBERS:=Numbers_test.txt}"
 : "${TAG:=k${K}_${OPT}_it${MAXITER}}"
+: "${VARIANT:=serial}"
+
+WORKERS=1
+if [ "$VARIANT" = parallel ]; then
+    WORKERS="${SLURM_CPUS_PER_TASK:-1}"
+    # un processo per core, ciascuno con un solo thread BLAS/OpenMP
+    export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+fi
 
 [[ "$NUMBERS" = /* ]] || NUMBERS="$CODE_DIR/$NUMBERS"
 [ -f "$NUMBERS" ] || { echo "✗ manca $NUMBERS"; exit 1; }
@@ -76,11 +94,12 @@ PY
 ) || exit 1
 
 OUT="$BASE/output/${TAG}/N${N}/seed_${SEED}"
-echo "  task $SLURM_ARRAY_TASK_ID → N=$N (riga $N_IDX di $(basename "$NUMBERS"))  seed=$SEED  k=$K  opt=$OPT  maxiter=$MAXITER  backend=$BACKEND"
+echo "  task $SLURM_ARRAY_TASK_ID → N=$N (riga $N_IDX di $(basename "$NUMBERS"))  seed=$SEED  k=$K  opt=$OPT  maxiter=$MAXITER  backend=$BACKEND  variant=$VARIANT  workers=$WORKERS"
 echo "  output: $OUT"
 t0=$(date +%s)
 python run_local.py --num "$N" --k "$K" --optimizer "$OPT" --maxiter "$MAXITER" \
-       --seed "$SEED" --outdir "$OUT" --backend "$BACKEND"
+       --seed "$SEED" --outdir "$OUT" --backend "$BACKEND" \
+       --variant "$VARIANT" --workers "$WORKERS"
 RC=$?
 echo "  N=$N seed=$SEED terminato rc=$RC in $(( $(date +%s) - t0 ))s"
 exit $RC

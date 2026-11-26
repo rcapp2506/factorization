@@ -46,7 +46,8 @@ def loss_func_estimator(
     n_shots,
     experiment_result,
     CUNQA: str,
-    family_name = None
+    family_name = None,
+    variant: str = "serial"
 ):
     """
     Evalúa la función de pérdida usando un tensor de signos precomputado (d_t)
@@ -252,15 +253,29 @@ def loss_func_estimator(
     
     #print(f"loss_ab: {loss_ab}")
 
-    base_loss = loss_pq + loss_ab
+    # NOTE (fork): due varianti del costo, come nelle due versioni del CESGA.
+    #  - "serial"   (FAO_DoTS/PCE): loss_pq + loss_ab + regolarizzazione
+    #                100 * mean(<P>^2)^2. Il criterio di arresto usa il costo
+    #                senza regolarizzazione (base_loss).
+    #  - "parallel" (FAO_DoTS/PCE_parallel, con cui sono stati prodotti quasi
+    #                tutti i risultati k=4 pubblicati): niente regolarizzazione,
+    #                penalità N se (a - b) = 0 (mod N); costo totale = base_loss.
+    if variant == "parallel":
+        loss_heur_2 = prefactor_delta * kron_delta((a_int - b_int) % N_int, 0)
+        base_loss = loss_pq + loss_ab + loss_heur_2
+        total_loss = base_loss
+    elif variant == "serial":
+        base_loss = loss_pq + loss_ab
 
-    # ---------------------------------------------------------
-    # 7. Regularización anti-saturación (tipo MaxCut)
-    # ---------------------------------------------------------
-    reg_term = np.mean([z**2 for z in values]) ** 2
+        # ---------------------------------------------------------
+        # 7. Regularización anti-saturación (tipo MaxCut)
+        # ---------------------------------------------------------
+        reg_term = np.mean([z**2 for z in values]) ** 2
 
-    nu = 100.0   # o 100.0, o 1000.0
-    total_loss = base_loss  + nu * reg_term
+        nu = 100.0   # o 100.0, o 1000.0
+        total_loss = base_loss  + nu * reg_term
+    else:
+        raise ValueError(f"variante sconosciuta: {variant!r} (serial | parallel)")
 
 
     ### ----------------------------------------------------- ###

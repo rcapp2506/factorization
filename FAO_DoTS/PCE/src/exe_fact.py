@@ -59,7 +59,9 @@ def ejecutar_fact(
     n_shots,
     nqpus,
     cunqa_str_arg,
-    family_name
+    family_name,
+    variant="serial",
+    workers=1
 ):
     """
     Ejecuta un experimento de MaxCut utilizando un circuito cuántico variacional (VQE).
@@ -243,7 +245,9 @@ def ejecutar_fact(
         maxiter=maxiter,
         log_csv_path=ruta_csv,
         cunqa_str=cunqa_str_arg,
-        family_name = family_name
+        family_name = family_name,
+        variant=variant,
+        workers=workers
     )
 
 
@@ -300,6 +304,8 @@ def ejecutar_fact(
         "compression": k,
         "qubits":qubits, 
         "elapsed_time": elapsed,
+        "variant": variant,     # NOTE (fork): serial = FAO_DoTS/PCE, parallel = FAO_DoTS/PCE_parallel
+        "workers": workers,
         "f_loss_value": fvalue,
         "function_evaluations": fevs,
         "Number of iterations": nit,
