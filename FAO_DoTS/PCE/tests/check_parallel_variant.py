@@ -15,7 +15,15 @@ una cartella temporanea:
   2. questo fork con --variant parallel, backend numpy, workers=1;
   3. questo fork con --variant parallel, backend numpy, workers=4.
 Controlla che i campi del JSON finale coincidano (parametri, costo, nfev, nit,
-a, b, p, q). Esce con codice 1 al primo controllo fallito.
+a, b, p, q). Con il backend numpy le varianti parallele valutano la
+popolazione in blocco (DE "vectorized"), quindi il test copre anche quel percorso.
+
+Variante parallel_l10 (penalità di peso 10, configurazione CESGA a 26-32 bit):
+  4. la funzione di costo riproduce i costi registrati nei JSON del CESGA per
+     tutti i run falliti a 26-32 bit (k=4), dati a e b del JSON;
+  5. numpy in blocco (1 e 4 processi) dà lo stesso run della valutazione
+     individuale con Aer.
+Esce con codice 1 se un controllo fallisce.
 """
 import json
 import os
@@ -52,10 +60,45 @@ import sys, json
 sys.path.insert(0, sys.argv[1])
 from src.exe_fact import ejecutar_fact
 N, k, maxiter, seed, workers = map(int, sys.argv[2:7])
+variant = sys.argv[7] if len(sys.argv) > 7 else "parallel"
+mode = sys.argv[8] if len(sys.argv) > 8 else "Numpy"
 r = ejecutar_fact(N_int=N, optimizer="DIFFERENTIALEVOLUTION", optimizer_params={"seed": seed},
-                  k=k, maxiter=maxiter, n_shots=1, nqpus=None, cunqa_str_arg="Numpy",
-                  family_name=None, variant="parallel", workers=workers)[0]
+                  k=k, maxiter=maxiter, n_shots=1, nqpus=None, cunqa_str_arg=mode,
+                  family_name=None, variant=variant, workers=workers)[0]
 print("RESULT " + json.dumps(r))
+'''
+
+# parallel_l10 non ha un codice originale pubblicato: si verifica che la
+# funzione di costo riproduca i costi registrati nei JSON del CESGA a 26-32 bit
+# (k=4), dove quella configurazione è stata usata, decodificando a e b dai JSON.
+CHECK_L10 = r'''
+import sys, glob, json, re
+import numpy as np
+sys.path.insert(0, sys.argv[1])
+import src.loss_functions as lf
+from src.auxiliar import num_qubits
+from src.circuit_builder import Circuit
+from src.tensor_exp_value import build_sign_tensor
+ok = tot = 0
+for f in glob.glob(sys.argv[2] + "/k_4/**/*.json", recursive=True):
+    N = int(re.search(r"num_(\d+)", f)[1])
+    if N.bit_length() not in (26, 30, 32):
+        continue
+    nb = N.bit_length(); m = 2 * nb; q = num_qubits(m, 4); L = int(np.ceil(1.5 * q ** 2))
+    cb = Circuit(size=q, p=L, entanglement="Taylor_efficient", rotation="Taylor_efficient",
+                 connectivity="brickwork_single_rotating", mode="custom"); cb.compile_circuit()
+    qc = cb.get_circuit(); d_t = build_sign_tensor(3, q, 4)
+    for r in json.load(open(f))["resultados"]:
+        fl = float(r["f_loss_value"])
+        if fl == 0 or not fl.is_integer():
+            continue
+        lf.alt_extract_primes = lambda v, na, nbb, a=r["a_int"], b=r["b_int"]: (None, None, a, b)
+        tot_loss, _ = lf.loss_func_estimator(
+            x=np.zeros(qc.num_parameters), ansatz=[qc], sim=None, N_int=N, num_a_bits=nb,
+            num_b_bits=nb, list_size=m // 3, num_qubits=q, d_t=d_t, n_shots=1,
+            experiment_result=[], CUNQA="Numpy", variant="parallel_l10")
+        tot += 1; ok += (tot_loss == fl)
+print("RESULT " + json.dumps({"ok": ok, "tot": tot}))
 '''
 
 FAILED = []
@@ -96,6 +139,9 @@ def same(u, v):
     return u == v
 
 
+CASES_L10 = [(4009, 4, 300, 0, "converge, k=4"),
+             (881851, 3, 15, 1, "si ferma a maxiter")]
+
 CASES = [(899, 3, 300, 0, "converge"),
          (4009, 4, 300, 0, "converge, k=4"),
          (881851, 3, 15, 1, "si ferma a maxiter")]
@@ -118,5 +164,22 @@ if __name__ == "__main__":
                             f"{'' if not diff else ', DIVERSI: ' + str(diff)} "
                             f"(nfev={new['function_evaluations']}, nit={new['Number of iterations']}, "
                             f"p={new['p_int']}, q={new['q_int']}, costo={new['f_loss_value']})")
+    print("parallel_l10: costi registrati dal CESGA a 26-32 bit (k=4)", flush=True)
+    res = run(CHECK_L10, [HERE, os.path.join(os.path.dirname(HERE), "Results", "Resultados", "Factorization")])
+    check(res is not None and res["tot"] > 0 and res["ok"] == res["tot"],
+          f"  costo ricalcolato = costo registrato in {res and res['ok']}/{res and res['tot']} run falliti")
+    for N, k, maxiter, seed, what in (CASES_L10[:1] if "--quick" in sys.argv else CASES_L10):
+        print(f"parallel_l10 N={N} k={k} maxiter={maxiter} seed={seed} ({what})", flush=True)
+        ref = run(RUN_FORK, [HERE, N, k, maxiter, seed, 1, "parallel_l10", "Simulation"])
+        check(ref is not None, "  valutazione individuale con Aer eseguita")
+        if ref is None:
+            continue
+        for workers in (1, 4):
+            new = run(RUN_FORK, [HERE, N, k, maxiter, seed, workers, "parallel_l10", "Numpy"])
+            diff = None if new is None else [kk for kk in KEYS if not same(ref[kk], new[kk])]
+            check(new is not None and not diff,
+                  f"  numpy in blocco, workers={workers}: {len(KEYS)} campi identici ad Aer individuale"
+                  f"{'' if not diff else ', DIVERSI: ' + str(diff)}"
+                  + ("" if new is None else f" (nfev={new['function_evaluations']}, costo={new['f_loss_value']})"))
     print("\nESITO:", "TUTTO OK" if not FAILED else f"{len(FAILED)} controlli FALLITI")
     sys.exit(1 if FAILED else 0)

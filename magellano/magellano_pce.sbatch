@@ -17,7 +17,8 @@
 #   NUMBERS  file dei semiprimi, assoluto o relativo a $CODE_DIR
 #            (default Numbers_test.txt; es. magellano/numbers_cesga_k4.txt)
 #   TAG      nome della cartella di output (default k<K>_<OPT>_it<MAXITER>)
-#   VARIANT  serial (default, FAO_DoTS/PCE) | parallel (FAO_DoTS/PCE_parallel,
+#   VARIANT  serial (default, FAO_DoTS/PCE) | parallel_l10 (parallel con penalità
+#            di peso 10: configurazione CESGA a 26-32 bit) | parallel (FAO_DoTS/PCE_parallel,
 #            la versione con cui sono stati prodotti quasi tutti i risultati
 #            k=4 del CESGA). Con parallel la popolazione di DE è valutata su
 #            SLURM_CPUS_PER_TASK processi (1 thread BLAS ciascuno): chiedere i
@@ -62,7 +63,7 @@ source /gpfs/ddn/cta/cappu/factorization/slurm/magellano_common.sh
 : "${VARIANT:=serial}"
 
 WORKERS=1
-if [ "$VARIANT" = parallel ]; then
+if [ "$VARIANT" != serial ]; then   # parallel | parallel_l10
     WORKERS="${SLURM_CPUS_PER_TASK:-1}"
     # un processo per core, ciascuno con un solo thread BLAS/OpenMP
     export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1

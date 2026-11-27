@@ -41,6 +41,15 @@ def _worker_eval(x):
     return total
 
 
+def _worker_batch(X):
+    """Costo di un blocco di individui (righe di X), simulati in blocco."""
+    from src.loss_functions import loss_func_batch
+    return loss_func_batch(X, **_WORKER_ARGS)
+
+
+PARALLEL_VARIANTS = ("parallel", "parallel_l10")
+
+
 def run_vqe_optimization(
     sim,
     n_shots,
@@ -118,7 +127,7 @@ def run_vqe_optimization(
         # NOTE (fork): variante "parallel": il costo non ha regolarizzazione,
         # quindi coincide con l'indicatore; si ferma quando il migliore vale 0
         # (come callback_de_fac in PCE_parallel), senza valutazioni in più.
-        if variant == "parallel":
+        if variant in PARALLEL_VARIANTS:
             if intermediate_result.fun == 0.0:
                 print("🎯 Se alcanzó exactamente 0.0")
                 return True
@@ -412,7 +421,7 @@ def run_vqe_optimization(
 
         elif optimizer_lower == "differentialevolution":
 
-            if variant == "parallel":
+            if variant in PARALLEL_VARIANTS:
                 # NOTE (fork): come PCE_parallel: aggiornamento "deferred" della
                 # popolazione, valutazioni distribuite su `workers` processi.
                 de_kwargs = dict(opt_config["kwargs"], updating="deferred")
@@ -423,7 +432,43 @@ def run_vqe_optimization(
                     num_qubits=compiled_circuit[0].num_qubits, d_t=d_t,
                     n_shots=n_shots, CUNQA=cunqa_str, family_name=family_name,
                     variant=variant)
-                if workers > 1:
+                if cunqa_str == "Numpy":
+                    # NOTE (fork): DE "vectorized": a ogni generazione la
+                    # popolazione intera arriva in un'unica chiamata, è divisa in
+                    # `workers` blocchi e ogni blocco è simulato in blocco
+                    # (loss_func_batch). Stessi valori della valutazione
+                    # individuale, quindi stesso run.
+                    import contextlib
+                    import multiprocessing as mp
+                    pool_cm = (mp.get_context("fork").Pool(
+                                   workers, initializer=_worker_init,
+                                   initargs=(worker_args,))
+                               if workers > 1 else contextlib.nullcontext())
+                    with pool_cm as pool:
+                        if pool is None:
+                            _worker_init(worker_args)
+
+                        n_eval = [0]
+
+                        def func_vec(X):
+                            XT = np.asarray(X).T
+                            n_eval[0] += XT.shape[0]
+                            if pool is None:
+                                return _worker_batch(XT)
+                            parts = np.array_split(XT, workers)
+                            return np.concatenate(pool.map(_worker_batch, parts))
+
+                        result = differential_evolution(
+                            func_vec,
+                            bounds=[(0, 2*np.pi)] * len(initial_params),
+                            callback=callback_de_indicator,
+                            vectorized=True,
+                            **de_kwargs
+                        )
+                    # in modalità vectorized scipy conta le chiamate, non gli
+                    # individui valutati: si riporta il numero di valutazioni
+                    result.nfev = n_eval[0]
+                elif workers > 1:
                     import multiprocessing as mp
                     with mp.get_context("fork").Pool(
                             workers, initializer=_worker_init,

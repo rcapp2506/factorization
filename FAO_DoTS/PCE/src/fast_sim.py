@@ -99,6 +99,54 @@ class PauliRotationSim:
         pz = np.abs(psi) ** 2
         return [px, py, pz]
 
+    def probabilities_matrix(self, X, chunk=256):
+        """Probabilità nelle basi X, Y, Z per ogni riga di X, come array
+        (3, S, 2^n). Stati identici a statevector(); il cambio di base è un
+        prodotto matrice-matrice, quindi le probabilità possono differire da
+        probabilities() nell'ultima cifra (~1e-16)."""
+        X = np.asarray(X, dtype=float)
+        S, dim = X.shape[0], 2 ** self.n
+        out = np.empty((3, S, dim))
+        HnT = self.Hn.T
+        for s0 in range(0, S, chunk):
+            h = 0.5 * X[s0:s0 + chunk]
+            cs, sn = np.cos(h), np.sin(h)
+            psi = np.zeros((h.shape[0], dim), dtype=complex)
+            psi[:, 0] = 1.0
+            for k, f, c in self.gates:
+                psi = cs[:, k, None] * psi - (1j * sn[:, k, None]) * (c * psi[:, f])
+            sl = slice(s0, s0 + h.shape[0])
+            out[0, sl] = np.abs(psi @ HnT) ** 2
+            out[1, sl] = np.abs((psi * self.sdg) @ HnT) ** 2
+            out[2, sl] = np.abs(psi) ** 2
+        return out
+
+    def probabilities_batch(self, X, chunk=256):
+        """probabilities() per ogni riga di X (shape (S, num_parameters)).
+
+        NOTE (fork): le porte sono applicate a blocchi di righe con le stesse
+        operazioni elemento per elemento di statevector(), quindi ogni stato è
+        identico bit per bit a quello calcolato riga per riga; il cambio di
+        base (prodotto matrice-vettore) è fatto riga per riga come in
+        probabilities(). Usato dalla valutazione "vectorized" di DE.
+        """
+        X = np.asarray(X, dtype=float)
+        if X.ndim != 2 or X.shape[1] != self.num_parameters:
+            raise ValueError(f"attesa matrice (S, {self.num_parameters}), ricevuta {X.shape}")
+        out = []
+        for s0 in range(0, X.shape[0], chunk):
+            h = 0.5 * X[s0:s0 + chunk]
+            cs, sn = np.cos(h), np.sin(h)
+            psi = np.zeros((h.shape[0], 2 ** self.n), dtype=complex)
+            psi[:, 0] = 1.0
+            for k, f, c in self.gates:
+                psi = cs[:, k, None] * psi - (1j * sn[:, k, None]) * (c * psi[:, f])
+            for p in psi:
+                out.append([np.abs(self.Hn @ p) ** 2,
+                            np.abs(self.Hn @ (self.sdg * p)) ** 2,
+                            np.abs(p) ** 2])
+        return out
+
 
 _LAST = [None, None]   # (circuito, simulatore) dell'ultimo circuito usato
 

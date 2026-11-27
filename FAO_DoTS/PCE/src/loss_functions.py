@@ -47,7 +47,8 @@ def loss_func_estimator(
     experiment_result,
     CUNQA: str,
     family_name = None,
-    variant: str = "serial"
+    variant: str = "serial",
+    probabilities=None
 ):
     """
     Evalúa la función de pérdida usando un tensor de signos precomputado (d_t)
@@ -150,7 +151,9 @@ def loss_func_estimator(
         # probabilità esatte della modalità "Simulation" (Aer) senza l'overhead
         # di 3 run Aer per valutazione. Verificato in tests/check_numpy_backend.py.
         from src.fast_sim import get_sim
-        counts_list = get_sim(ansatz[0]).probabilities(x)
+        # NOTE (fork): `probabilities` già calcolate in blocco (loss_func_batch)
+        counts_list = (probabilities if probabilities is not None
+                       else get_sim(ansatz[0]).probabilities(x))
         n_shots = 1
 
     elif CUNQA == "Simulation":
@@ -238,7 +241,9 @@ def loss_func_estimator(
     ### ----------------------------------------------------- ###
     ### 5. Cálculo de la función de pérdida
     ### ----------------------------------------------------- ###
-    prefactor_delta = N_int
+    # NOTE (fork): peso delle penalità. L'articolo usa lambda = N; i run del
+    # CESGA a 26-32 bit (k=4) e da 22 bit (k=3) sono stati prodotti con 10.
+    prefactor_delta = 10 if variant == "parallel_l10" else N_int
 
     # NOTE (fork): p = gcd(a-b, N) e q = N // p, quindi p*q == N SEMPRE. Il
     # termine originale popcount(N XOR p*q)**2 era identicamente 0 e le quattro
@@ -260,9 +265,15 @@ def loss_func_estimator(
     #  - "parallel" (FAO_DoTS/PCE_parallel, con cui sono stati prodotti quasi
     #                tutti i risultati k=4 pubblicati): niente regolarizzazione,
     #                penalità N se (a - b) = 0 (mod N); costo totale = base_loss.
+    #  - "parallel_l10": come "parallel" ma con penalità di peso 10 invece di N
+    #                e senza la penalità su (a - b) = 0 (mod N): la configurazione
+    #                ricostruita dai JSON del CESGA a 26-32 bit (k=4).
     if variant == "parallel":
         loss_heur_2 = prefactor_delta * kron_delta((a_int - b_int) % N_int, 0)
         base_loss = loss_pq + loss_ab + loss_heur_2
+        total_loss = base_loss
+    elif variant == "parallel_l10":
+        base_loss = loss_pq + loss_ab
         total_loss = base_loss
     elif variant == "serial":
         base_loss = loss_pq + loss_ab
@@ -275,7 +286,7 @@ def loss_func_estimator(
         nu = 100.0   # o 100.0, o 1000.0
         total_loss = base_loss  + nu * reg_term
     else:
-        raise ValueError(f"variante sconosciuta: {variant!r} (serial | parallel)")
+        raise ValueError(f"variante sconosciuta: {variant!r} (serial | parallel | parallel_l10)")
 
 
     ### ----------------------------------------------------- ###
@@ -293,3 +304,62 @@ def loss_func_estimator(
 
  
 
+
+
+def loss_func_batch(X, ansatz, CUNQA, N_int, num_a_bits, num_b_bits, list_size,
+                    d_t, variant="serial", zero_tol=1e-10, **kwargs):
+    """NOTE (fork): costo totale per ogni riga di X (shape (S, num_parametri)).
+
+    Varianti "parallel" e "parallel_l10" (backend Numpy): il costo dipende solo
+    dai SEGNI dei correlatori. Stati, correlatori, decodifica e costo sono
+    calcolati in blocco; i correlatori possono differire da quelli della
+    valutazione individuale nell'ultima cifra (~1e-16), quindi le righe con un
+    correlatore |<P>| < zero_tol (dove il segno potrebbe cambiare) sono
+    ricalcolate con loss_func_estimator. Così i costi coincidono esattamente
+    con quelli della valutazione individuale.
+    Variante "serial" (regolarizzazione continua): loss_func_estimator riga per
+    riga, con le probabilità calcolate in blocco.
+    """
+    import math
+    if CUNQA != "Numpy":
+        raise ValueError("la valutazione in blocco richiede il backend Numpy")
+    from src.fast_sim import get_sim
+    sim_np = get_sim(ansatz[0])
+    X = np.asarray(X, dtype=float)
+    common = dict(ansatz=ansatz, CUNQA=CUNQA, N_int=N_int, num_a_bits=num_a_bits,
+                  num_b_bits=num_b_bits, list_size=list_size, d_t=d_t, variant=variant)
+
+    if variant not in ("parallel", "parallel_l10"):
+        probs = sim_np.probabilities_batch(X)
+        out = np.empty(len(probs))
+        for i, (x, p) in enumerate(zip(X, probs)):
+            out[i], _ = loss_func_estimator(x=x, experiment_result=[], probabilities=p,
+                                            **common, **kwargs)
+        return out
+
+    P = sim_np.probabilities_matrix(X)                         # (3, S, dim)
+    E = [P[c] @ np.asarray(d_t[c], dtype=float).T for c in range(3)]   # (S, ncomb)
+    m = num_a_bits + num_b_bits
+    rem = m - 2 * list_size
+    vals = np.concatenate([E[0][:, :list_size], E[1][:, :list_size], E[2][:, :rem]], axis=1)
+    bits = (1 + np.sign(vals)) / 2
+    w = 2.0 ** np.arange(max(num_a_bits, bits.shape[1] - num_a_bits))
+    A = bits[:, :num_a_bits] @ w[:num_a_bits]
+    B = bits[:, num_a_bits:] @ w[:bits.shape[1] - num_a_bits]
+    risky = np.abs(vals).min(axis=1) < zero_tol
+
+    N = N_int
+    lam = 10 if variant == "parallel_l10" else N
+    out = np.empty(X.shape[0])
+    for i in range(X.shape[0]):
+        if risky[i]:
+            out[i], _ = loss_func_estimator(x=X[i], experiment_result=[], **common, **kwargs)
+            continue
+        a, b = int(A[i]), int(B[i])
+        p = math.gcd(a - b, N)
+        D = (a - b) * (a + b)
+        loss = 2 * lam * int(p == 1 or p == N) + (D % N) ** 2 + lam * (int(a == b) + int(D == 0))
+        if variant == "parallel":
+            loss += lam * int((a - b) % N == 0)
+        out[i] = loss
+    return out

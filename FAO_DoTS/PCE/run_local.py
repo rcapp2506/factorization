@@ -21,8 +21,12 @@ Uso:
          serial = FAO_DoTS/PCE (costo con regolarizzazione, DE "immediate"),
          parallel = FAO_DoTS/PCE_parallel (senza regolarizzazione, penalità su
          (a-b) = 0 mod N, DE "deferred", decodifica del migliore di DE).
---workers processi per la variante parallel; con lo stesso seed il run è
-         identico per qualsiasi numero di workers.
+--variant parallel_l10: come parallel, ma con penalità di peso 10 invece di N e
+         senza la penalità su (a-b) = 0 mod N: la configurazione con cui il
+         CESGA ha prodotto i run k=4 a 26-32 bit (ricostruita dai loro JSON).
+--workers processi per le varianti parallel; con lo stesso seed il run è
+         identico per qualsiasi numero di workers. Con il backend numpy la
+         popolazione è simulata in blocco (DE "vectorized"), molto più veloce.
 
 Il CSV con una riga per valutazione si scrive solo con PCE_LOG_EVALS=1 (con k=4
 è ~1 GB per run); quello per generazione (*_iter.csv) si scrive sempre.
@@ -48,15 +52,17 @@ def main():
                     help="Cartella in cui scrivere Resultados/ (default: cartella corrente)")
     ap.add_argument("--backend", default="numpy", choices=["numpy", "aer"],
                     help="Simulatore statevector: numpy (default, veloce) o aer (riferimento)")
-    ap.add_argument("--variant", default="serial", choices=["serial", "parallel"],
+    ap.add_argument("--variant", default="serial", choices=["serial", "parallel", "parallel_l10"],
                     help="serial = FAO_DoTS/PCE (default); parallel = FAO_DoTS/PCE_parallel, "
-                         "con cui sono stati prodotti quasi tutti i risultati k=4 pubblicati")
+                         "con cui sono stati prodotti quasi tutti i risultati k=4 pubblicati; "
+                         "parallel_l10 = parallel con penalità di peso 10 e senza penalità su "
+                         "(a-b) = 0 mod N, la configurazione dei run CESGA a 26-32 bit")
     ap.add_argument("--workers", type=int, default=1,
                     help="Processi per valutare la popolazione di DE (solo --variant parallel; "
                          "il risultato non dipende da questo numero)")
     args = ap.parse_args()
-    if args.workers > 1 and args.variant != "parallel":
-        ap.error("--workers > 1 richiede --variant parallel")
+    if args.workers > 1 and args.variant == "serial":
+        ap.error("--workers > 1 richiede una variante parallel")
     mode = {"numpy": "Numpy", "aer": "Simulation"}[args.backend]
 
     optimizer_params = None
